@@ -2,56 +2,68 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
-    <title>MEX-INV 盘点系统</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SuperRapido V3 - 高灵敏版</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <script src="https://unpkg.com/@zxing/library@latest"></script>
     <style>
         @keyframes scan { 0% { top: 0%; } 100% { top: 100%; } }
         .animate-scan { animation: scan 1.5s linear infinite; }
-        body { touch-action: pan-x pan-y; background-color: #e2e8f0; }
-        .actual-qty-input:focus { border-color: #059669 !important; box-shadow: 0 0 0 4px rgba(16, 185, 129, 0.2); }
+        body { background-color: #f1f5f9; min-height: 100vh; }
+        .table-container { max-height: 75vh; overflow: auto; border-radius: 12px; }
+        /* 数量框强化 */
+        .qty-box { border: 3px solid #1e40af !important; background: #eff6ff !important; font-weight: 900 !important; }
+        /* 隐藏数字输入框调节箭头 */
+        input::-webkit-outer-spin-button, input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
     </style>
 </head>
-<body class="font-sans overflow-hidden">
-    <div id="app" class="p-2 h-screen flex flex-col">
-        <div id="scanStatus" class="fixed top-0 left-0 w-full h-1 z-[1000] transition-all"></div>
+<body class="font-sans antialiased">
+    <div id="app" class="p-2 flex flex-col h-screen overflow-hidden">
+        <div id="scanStatus" class="fixed top-0 left-0 w-full h-1.5 z-[1000] transition-all"></div>
 
         <div class="flex justify-between items-center mb-2 px-2">
-            <h1 class="font-black text-xl text-blue-900 italic uppercase">Mex-Inventory</h1>
-            <button onclick="resetData()" class="text-[10px] bg-white px-2 py-1 rounded text-slate-500 shadow-sm">清空重置</button>
+            <h1 class="font-black text-2xl text-blue-900 tracking-tighter italic">SuperRapido <span class="text-xs opacity-50">PRO</span></h1>
+            <button onclick="resetData()" class="text-[10px] bg-white border px-2 py-1 rounded text-red-500 font-bold shadow-sm">重置系统</button>
         </div>
 
         <div class="flex gap-2 mb-3 px-1">
-            <label class="bg-slate-800 text-white w-12 h-12 flex items-center justify-center rounded-xl cursor-pointer shadow-lg active:scale-95 transition-all">
-                📂<input type="file" id="fileInput" class="hidden" accept=".xlsx, .xls" />
+            <label class="bg-slate-900 text-white w-14 h-14 flex items-center justify-center rounded-2xl cursor-pointer shadow-xl active:scale-90 transition-all">
+                <span class="text-2xl">📂</span><input type="file" id="fileInput" class="hidden" accept=".xlsx, .xls" />
             </label>
             <div class="relative flex-1 flex gap-2">
-                <input type="text" id="searchInput" placeholder="点击输入条码" class="flex-1 h-12 px-4 rounded-xl border-2 border-slate-300 font-bold outline-none bg-white shadow-md focus:border-blue-500" />
-                <button onclick="startScan()" class="bg-blue-600 text-white px-5 rounded-xl font-black shadow-xl active:bg-blue-700">📷 开启扫码</button>
+                <input type="text" id="searchInput" placeholder="点击输条码..." class="flex-1 h-14 px-4 rounded-2xl border-2 border-slate-300 font-bold text-lg outline-none bg-white shadow-md focus:border-blue-600 transition-all" />
+                <button onclick="startScan()" class="bg-blue-700 text-white px-6 rounded-2xl font-black shadow-xl active:bg-blue-800 flex items-center gap-2">
+                    <span class="text-xl">📷</span> 扫码
+                </button>
             </div>
         </div>
 
-        <div class="flex-1 overflow-auto bg-white rounded-2xl shadow-inner border border-slate-300">
+        <div class="table-container bg-white shadow-2xl border border-slate-200 flex-1">
             <table id="mainTable" class="border-collapse table-fixed w-max">
-                <thead id="tableHead" class="sticky top-0 bg-slate-100 z-10 shadow-md"></thead>
+                <thead id="tableHead" class="sticky top-0 bg-slate-100 z-10 shadow-sm"></thead>
                 <tbody id="tableBody"></tbody>
             </table>
         </div>
 
-        <button onclick="exportExcel()" class="mt-2 bg-emerald-800 text-white py-4 rounded-xl font-black text-lg shadow-xl active:bg-emerald-900 transition-colors">导出盘点表 (EXCEL)</button>
+        <button onclick="exportExcel()" class="mt-3 bg-emerald-700 text-white py-5 rounded-2xl font-black text-xl shadow-2xl active:bg-emerald-800 transition-transform active:scale-[0.98]">
+            保存并导出盘点表 (EXCEL)
+        </button>
 
         <div id="cameraModal" class="fixed inset-0 bg-black z-[999] hidden flex-col">
-            <div id="cameraHeader" class="flex justify-between items-center p-6 text-white bg-black/60 backdrop-blur-md">
-                <span id="scanMsg" class="font-bold">对准条码...</span>
-                <button onclick="stopScan()" class="bg-white/20 px-6 py-2 rounded-full border border-white/40">退出</button>
+            <div class="flex justify-between items-center p-6 text-white bg-gradient-to-b from-black/80 to-transparent">
+                <span class="font-black text-lg tracking-widest">扫描中...</span>
+                <button onclick="stopScan()" class="bg-red-600 px-8 py-3 rounded-full font-bold border-2 border-white/20">退出</button>
             </div>
             <div class="flex-1 relative">
                 <video id="video" class="absolute inset-0 w-full h-full object-cover"></video>
-                <div class="absolute inset-0 border-[5rem] border-black/50 pointer-events-none flex items-center justify-center">
-                    <div id="scanFrame" class="w-80 h-48 border-4 border-white/50 rounded-xl relative overflow-hidden transition-colors">
-                        <div id="scanLine" class="absolute top-0 w-full h-1 bg-blue-500 shadow-[0_0_15px_blue] animate-scan"></div>
+                <div class="absolute inset-0 flex items-center justify-center">
+                    <div class="w-72 h-72 border-2 border-white/30 rounded-3xl relative overflow-hidden bg-white/5 backdrop-blur-[1px]">
+                        <div class="absolute inset-x-0 top-0 h-1 bg-blue-400 shadow-[0_0_20px_#60a5fa] animate-scan"></div>
+                        <div class="absolute top-0 left-0 w-6 h-6 border-t-4 border-l-4 border-blue-500"></div>
+                        <div class="absolute top-0 right-0 w-6 h-6 border-t-4 border-r-4 border-blue-500"></div>
+                        <div class="absolute bottom-0 left-0 w-6 h-6 border-b-4 border-l-4 border-blue-500"></div>
+                        <div class="absolute bottom-0 right-0 w-6 h-6 border-b-4 border-r-4 border-blue-500"></div>
                     </div>
                 </div>
             </div>
@@ -59,10 +71,20 @@
     </div>
 
     <script>
-        let inventoryData = JSON.parse(localStorage.getItem('MEX_DATA_V1')) || [];
-        let headers = JSON.parse(localStorage.getItem('MEX_HEAD_V1')) || [];
-        let colWidths = JSON.parse(localStorage.getItem('MEX_WIDTHS_V1')) || {};
-        const codeReader = new ZXing.BrowserMultiFormatReader();
+        let inventoryData = JSON.parse(localStorage.getItem('SR_DATA_V3')) || [];
+        let headers = JSON.parse(localStorage.getItem('SR_HEAD_V3')) || [];
+        let colWidths = JSON.parse(localStorage.getItem('SR_WIDTHS_V3')) || {};
+        
+        // 扫码配置：提高灵敏度
+        const hints = new Map();
+        hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
+        hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, [
+            ZXing.BarcodeFormat.EAN_13, 
+            ZXing.BarcodeFormat.EAN_8, 
+            ZXing.BarcodeFormat.CODE_128, 
+            ZXing.BarcodeFormat.UPC_A
+        ]);
+        const codeReader = new ZXing.BrowserMultiFormatReader(hints);
 
         function init() {
             if (headers.length > 0) renderTable();
@@ -70,35 +92,36 @@
             document.getElementById('fileInput').onchange = handleFileUpload;
         }
 
+        // 渲染表格
         function renderTable() {
             const thead = document.getElementById('tableHead');
             const tbody = document.getElementById('tableBody');
             
-            // 渲染表头 + 深色调节手柄
+            // 表头：集成移动按钮和加厚调节区
             thead.innerHTML = `<tr>${headers.map((h, i) => `
-                <th class="relative p-4 text-left text-slate-800 font-black border-b border-r border-slate-300 bg-slate-100" style="width: ${colWidths[h] || 150}px">
-                    <span class="truncate block pr-6">${h}</span>
-                    <div class="absolute right-0 top-0 h-full w-10 flex items-center justify-end" 
-                         ontouchstart="initResize(event, '${h}')">
-                        <div class="w-1.5 h-10 bg-slate-600 rounded-full mr-1 shadow-sm flex flex-col justify-around py-2 px-[1px]">
-                            <div class="w-full h-0.5 bg-white/30 rounded-full"></div>
-                            <div class="w-full h-0.5 bg-white/30 rounded-full"></div>
+                <th class="relative p-3 text-left border-b border-r border-slate-300 bg-slate-50" style="width: ${colWidths[h] || 160}px">
+                    <div class="flex flex-col gap-1">
+                        <span class="font-black text-slate-800 truncate text-sm">${h}</span>
+                        <div class="flex gap-2 mt-1">
+                            <button onclick="moveCol(${i}, -1)" class="bg-slate-200 px-2 py-0.5 rounded text-[10px] active:bg-blue-200">◀</button>
+                            <button onclick="moveCol(${i}, 1)" class="bg-slate-200 px-2 py-0.5 rounded text-[10px] active:bg-blue-200">▶</button>
                         </div>
+                    </div>
+                    <div class="absolute right-0 top-0 h-full w-10 flex items-center justify-end cursor-col-resize active:bg-blue-100" 
+                         ontouchstart="initResize(event, '${h}')">
+                        <div class="w-1.5 h-12 bg-slate-800 rounded-full mr-1 opacity-80 shadow-sm"></div>
                     </div>
                 </th>`).join('')}</tr>`;
 
-            // 渲染行 + 重点蓝色框框
             tbody.innerHTML = inventoryData.map((row, idx) => `
-                <tr class="even:bg-slate-50/50 transition-colors duration-500" id="row-${idx}">
+                <tr class="even:bg-slate-50 transition-all duration-300" id="row-${idx}">
                     ${headers.map(h => `
                         <td class="border-b border-r border-slate-200 p-2">
                             ${h === '实际数量' ? `
-                                <div class="p-1">
-                                    <input type="number" value="${row[h] || ''}" 
-                                        onchange="updateVal(${idx}, '${h}', this.value)"
-                                        inputmode="decimal"
-                                        class="actual-qty-input w-full h-12 px-3 bg-blue-50 border-2 border-blue-700 rounded-lg font-black text-blue-900 text-xl shadow-md outline-none transition-all" />
-                                </div>
+                                <input type="number" value="${row[h] || ''}" 
+                                    onchange="updateVal(${idx}, '${h}', this.value)"
+                                    inputmode="decimal"
+                                    class="qty-box w-full h-14 px-3 rounded-xl text-blue-900 text-2xl outline-none shadow-inner" />
                             ` : `
                                 <input type="text" value="${row[h] || ''}" 
                                     onchange="updateVal(${idx}, '${h}', this.value)"
@@ -108,54 +131,71 @@
                 </tr>`).join('');
         }
 
+        // 移动列逻辑
+        function moveCol(index, direction) {
+            const newIndex = index + direction;
+            if (newIndex < 0 || newIndex >= headers.length) return;
+            const temp = headers[index];
+            headers[index] = headers[newIndex];
+            headers[newIndex] = temp;
+            save(); renderTable();
+        }
+
+        // 搜索识别
         function performSearch(code) {
             const cleanCode = code.trim();
             if (!cleanCode) return;
             const key = headers.find(h => h.toLowerCase().includes('cod') || h.toLowerCase().includes('bar')) || headers[0];
             const idx = inventoryData.findIndex(r => String(r[key]).trim() === cleanCode);
-
             const statusLine = document.getElementById('scanStatus');
+
             if (idx !== -1) {
                 inventoryData[idx]['实际数量'] = (parseFloat(inventoryData[idx]['实际数量']) || 0) + 1;
                 save(); renderTable();
-                
-                const row = document.getElementById(`row-${idx}`);
-                row.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                row.classList.add('bg-yellow-300', 'ring-4', 'ring-blue-500', 'ring-inset');
-                
-                statusLine.className = "fixed top-0 left-0 w-full h-1 z-[1000] bg-green-500 shadow-[0_0_15px_green]";
-                playAudio(880); 
+                document.getElementById(`row-${idx}`).scrollIntoView({ behavior: 'smooth', block: 'center' });
+                document.getElementById(`row-${idx}`).style.backgroundColor = "#fef08a";
+                statusLine.className = "fixed top-0 left-0 w-full h-1.5 z-[1000] bg-green-500 shadow-[0_0_20px_#22c55e]";
+                playAudio(880);
                 if (navigator.vibrate) navigator.vibrate(100);
             } else {
-                statusLine.className = "fixed top-0 left-0 w-full h-1 z-[1000] bg-red-500 shadow-[0_0_15px_red]";
+                statusLine.className = "fixed top-0 left-0 w-full h-1.5 z-[1000] bg-red-600 shadow-[0_0_20px_#dc2626]";
                 playAudio(220);
-                alert("未找到条码: " + cleanCode);
+                alert("未找到该条码，请检查！");
             }
             document.getElementById('searchInput').value = '';
-            setTimeout(() => { statusLine.className = "fixed top-0 left-0 w-full h-0 z-[1000]"; }, 1000);
+            setTimeout(() => { statusLine.className = "fixed top-0 left-0 w-full h-0"; }, 1000);
         }
 
+        // 灵敏摄像头启动
         async function startScan() {
             document.getElementById('cameraModal').style.display = 'flex';
             try {
                 const devices = await codeReader.listVideoInputDevices();
                 const back = devices.find(d => d.label.toLowerCase().includes('back') || d.label.toLowerCase().includes('rear')) || devices[devices.length - 1];
-                const constraints = { video: { deviceId: back.deviceId, width: { ideal: 1920 }, height: { ideal: 1080 } } };
                 
-                codeReader.decodeFromConstraints(constraints, 'video', (result, err) => {
-                    if (result) {
-                        performSearch(result.getText());
-                        stopScan();
-                    }
+                // 强制高分辨率和自动对焦偏好
+                const constraints = { 
+                    video: { 
+                        deviceId: back.deviceId, 
+                        width: { ideal: 1920 }, 
+                        height: { ideal: 1080 },
+                        facingMode: "environment"
+                    } 
+                };
+                
+                codeReader.decodeFromConstraints(constraints, 'video', (result) => {
+                    if (result) { performSearch(result.getText()); stopScan(); }
                 });
-            } catch (e) { alert("摄像头启动失败，请检查权限"); stopScan(); }
+            } catch (e) { alert("扫码启动失败"); stopScan(); }
         }
 
         function stopScan() { codeReader.reset(); document.getElementById('cameraModal').style.display = 'none'; }
 
+        // 高灵敏调节列宽
         function initResize(e, h) {
+            e.preventDefault();
             const startX = e.touches ? e.touches[0].pageX : e.pageX;
-            const startW = colWidths[h] || 150;
+            const startW = colWidths[h] || 160;
             const move = (me) => {
                 const curX = me.touches ? me.touches[0].pageX : me.pageX;
                 colWidths[h] = Math.max(80, startW + (curX - startX));
@@ -172,9 +212,9 @@
 
         function updateVal(idx, h, val) { inventoryData[idx][h] = val; save(); }
         function save() { 
-            localStorage.setItem('MEX_DATA_V1', JSON.stringify(inventoryData)); 
-            localStorage.setItem('MEX_HEAD_V1', JSON.stringify(headers)); 
-            localStorage.setItem('MEX_WIDTHS_V1', JSON.stringify(colWidths));
+            localStorage.setItem('SR_DATA_V3', JSON.stringify(inventoryData)); 
+            localStorage.setItem('SR_HEAD_V3', JSON.stringify(headers)); 
+            localStorage.setItem('SR_WIDTHS_V3', JSON.stringify(colWidths));
         }
         function playAudio(freq) {
             try {
@@ -193,7 +233,7 @@
                 const wb = XLSX.read(evt.target.result, { type: 'binary' });
                 const data = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { defval: "" });
                 headers = Object.keys(data[0]);
-                if (!headers.includes('实际数量')) headers.push('实际数量');
+                if (!headers.includes('实际数量')) headers.unshift('实际数量');
                 inventoryData = data;
                 save(); renderTable();
             };
@@ -203,10 +243,9 @@
             const ws = XLSX.utils.json_to_sheet(inventoryData, { header: headers });
             const wb = XLSX.utils.book_new();
             XLSX.utils.book_append_sheet(wb, ws, "Inventory");
-            XLSX.writeFile(wb, `MexInv_${new Date().getHours()}h.xlsx`);
+            XLSX.writeFile(wb, `Stock_${new Date().toLocaleDateString()}.xlsx`);
         }
-        function resetData() { if(confirm("确定要清空所有数据重新开始吗？")){ localStorage.clear(); location.reload(); } }
-
+        function resetData() { if(confirm("确定清空数据？建议先导出备份！")){ localStorage.clear(); location.reload(); } }
         init();
     </script>
 </body>
