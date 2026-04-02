@@ -3,195 +3,197 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
-    <title>SuperRapido V8 - 稳定修复版</title>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <title>SuperRapido V9 - 最终自愈版</title>
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
     <script src="https://unpkg.com/@zxing/library@latest"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        body { background-color: #f1f5f9; font-family: sans-serif; }
-        .table-container { background: white; border: 1px solid #cbd5e1; height: 75vh; overflow: auto; border-radius: 8px; }
-        th { position: relative; border-right: 2px solid #cbd5e1; background: #f8fafc; padding: 10px; min-width: 100px; }
-        td { border-right: 1px solid #e2e8f0; border-bottom: 1px solid #e2e8f0; padding: 4px; }
-        /* 列宽调节敏感区 */
-        .resizer { position: absolute; right: 0; top: 0; width: 25px; height: 100%; z-index: 50; cursor: col-resize; touch-action: none; }
-        .resizer:active { background: rgba(59, 130, 246, 0.3); }
-        /* 数量框 */
-        .qty-input { width: 100%; height: 45px; border: 2px solid #2563eb; background: #eff6ff; font-weight: 900; text-align: center; font-size: 1.2rem; border-radius: 6px; }
-        /* 闪烁高亮 */
-        @keyframes blink { 0% { background: #fef08a; } 50% { background: #fde047; } 100% { background: #fef08a; } }
-        .row-blink { animation: blink 0.8s 3; }
+        body { background-color: #f1f5f9; -webkit-overflow-scrolling: touch; }
+        .table-container { background: white; border: 1px solid #cbd5e1; height: 70vh; overflow: auto; border-radius: 12px; position: relative; }
+        table { border-collapse: separate; border-spacing: 0; }
+        th { position: sticky; top: 0; z-index: 40; background: #f8fafc; border-right: 2px solid #cbd5e1; border-bottom: 2px solid #cbd5e1; padding: 12px; }
+        td { border-right: 1px solid #e2e8f0; border-bottom: 1px solid #e2e8f0; padding: 2px; }
+        .resizer { position: absolute; right: 0; top: 0; width: 35px; height: 100%; z-index: 50; touch-action: none; cursor: col-resize; }
+        .resizer::after { content: ""; position: absolute; right: 4px; top: 20%; width: 4px; height: 60%; background: #cbd5e1; border-radius: 2px; }
+        .qty-input { width: 100%; height: 50px; border: 3px solid #2563eb !important; background: #eff6ff !important; font-weight: 900; text-align: center; font-size: 1.5rem; border-radius: 8px; }
+        .row-blink { background-color: #fef08a !important; transition: background 0.3s; }
+        #loadingOverlay { position: fixed; inset: 0; background: rgba(255,255,255,0.9); z-index: 9999; display: flex; flex-direction: column; align-items: center; justify-content: center; font-weight: bold; }
     </style>
 </head>
 <body class="p-2">
+    <div id="loadingOverlay">正在初始化超市系统...<br><span id="loadStatus" class="text-blue-600 text-sm">正在加载 Excel 插件...</span></div>
+
     <div class="flex flex-col h-screen">
-        <div class="flex justify-between items-center mb-2">
-            <h1 class="text-xl font-black text-blue-900">SuperRapido V8</h1>
-            <button onclick="hardReset()" class="text-xs bg-red-100 text-red-600 px-2 py-1 rounded">彻底清空</button>
+        <div class="flex justify-between items-center mb-2 px-1">
+            <h1 class="text-xl font-black text-blue-900 tracking-tighter">SuperRapido V9</h1>
+            <button onclick="clearEverything()" class="text-[10px] text-red-500 font-bold border border-red-200 px-2 py-1 rounded bg-white shadow-sm">点此重置系统</button>
         </div>
 
-        <div class="flex gap-2 mb-3 bg-white p-2 rounded-xl shadow-sm border">
-            <label class="bg-slate-800 text-white p-4 rounded-xl flex items-center justify-center active:scale-95">
+        <div class="flex gap-2 mb-3 bg-white p-2 rounded-2xl shadow-md border border-slate-200">
+            <label class="bg-slate-900 text-white w-14 h-14 flex items-center justify-center rounded-xl active:scale-90 transition-transform">
                 📂 <input type="file" id="fileInput" class="hidden" accept=".xlsx, .xls" />
             </label>
             <div class="flex-1 flex gap-1">
-                <input type="text" id="manualInput" placeholder="输入条码..." class="flex-1 border rounded-xl px-3 font-bold outline-none focus:border-blue-500" />
-                <button onclick="openScanner()" class="bg-blue-600 text-white px-5 rounded-xl font-bold shadow-md">📷 扫码</button>
+                <input type="text" id="manualInput" placeholder="手动输条码..." class="flex-1 border-2 border-slate-100 rounded-xl px-3 font-bold outline-none focus:border-blue-500" />
+                <button onclick="startScan()" class="bg-blue-600 text-white px-5 rounded-xl font-black shadow-lg">📷 扫码</button>
             </div>
         </div>
 
-        <div class="table-container" id="scrollBox">
-            <table class="border-collapse table-fixed w-max text-sm">
-                <thead id="tHead" class="sticky top-0 z-20 shadow-sm"></thead>
+        <div class="table-container shadow-2xl" id="tableBox">
+            <table id="mainTable" class="table-fixed w-max text-sm">
+                <thead id="tHead"></thead>
                 <tbody id="tBody"></tbody>
             </table>
         </div>
 
-        <button onclick="downloadExcel()" class="mt-3 bg-emerald-700 text-white py-4 rounded-xl font-black text-lg shadow-xl active:scale-95">
-            💾 导出并保存 EXCEL
+        <button onclick="exportExcel()" class="mt-3 bg-emerald-700 text-white py-5 rounded-2xl font-black text-xl shadow-2xl active:bg-emerald-800">
+            💾 保存导出 EXCEL 盘点表
         </button>
     </div>
 
-    <div id="scannerModal" class="fixed inset-0 bg-black z-[999] hidden flex-col">
-        <div class="p-6 flex justify-between items-center text-white bg-black/50">
-            <span class="font-bold">连扫模式...</span>
-            <button onclick="closeScanner()" class="bg-red-600 px-8 py-3 rounded-full">退出</button>
+    <div id="scanModal" class="fixed inset-0 bg-black z-[1000] hidden flex-col">
+        <div class="p-6 flex justify-between items-center text-white bg-black/80">
+            <span class="font-bold">连续扫码中 (不关机)...</span>
+            <button onclick="stopScan()" class="bg-red-600 px-8 py-3 rounded-full font-black">退出</button>
         </div>
-        <video id="video" class="flex-1 object-cover"></video>
+        <video id="v" class="flex-1 object-cover"></video>
+        <div id="scanTip" class="absolute bottom-10 left-0 w-full text-center text-green-400 font-bold text-xl drop-shadow-lg"></div>
     </div>
 
     <script>
-        let inventory = JSON.parse(localStorage.getItem('SR8_DATA')) || [];
-        let columns = JSON.parse(localStorage.getItem('SR8_COLS')) || [];
-        let colWidths = JSON.parse(localStorage.getItem('SR8_WIDTHS')) || {};
-        const reader = new ZXing.BrowserMultiFormatReader();
+        let data = JSON.parse(localStorage.getItem('SR9_DATA')) || [];
+        let cols = JSON.parse(localStorage.getItem('SR9_COLS')) || [];
+        let wds = JSON.parse(localStorage.getItem('SR9_WDS')) || {};
+        const codeReader = new ZXing.BrowserMultiFormatReader();
 
-        function renderAll() {
+        // 检查插件是否加载成功的定时器
+        const checkLibrary = setInterval(() => {
+            if (typeof XLSX !== 'undefined') {
+                clearInterval(checkLibrary);
+                document.getElementById('loadingOverlay').style.display = 'none';
+                if (cols.length) render();
+            } else {
+                document.getElementById('loadStatus').innerText = "插件加载慢，请稍候或检查网络...";
+            }
+        }, 500);
+
+        function render() {
             const head = document.getElementById('tHead');
             const body = document.getElementById('tBody');
-            if (!columns.length) return;
+            if (!cols.length) return;
 
-            head.innerHTML = `<tr>${columns.map(c => `
-                <th style="width: ${colWidths[c] || 140}px">
+            head.innerHTML = `<tr>${cols.map(c => `
+                <th style="width: ${wds[c] || 150}px">
                     <div class="flex flex-col items-start gap-1">
-                        <span class="truncate w-full">${c}</span>
-                        <button onclick="moveCol('${c}')" class="text-[9px] border bg-white px-1 rounded text-blue-500">↔️ 交换</button>
+                        <span class="truncate w-full text-slate-800">${c}</span>
+                        <button onclick="swapCol('${c}')" class="text-[9px] bg-white border px-1 rounded text-blue-600">↔️ 交换</button>
                     </div>
-                    <div class="resizer" ontouchstart="resizing(event, '${c}')"></div>
+                    <div class="resizer" ontouchstart="doResize(event, '${c}')"></div>
                 </th>`).join('')}</tr>`;
 
-            body.innerHTML = inventory.map((row, rIdx) => `
-                <tr id="row-${rIdx}">
-                    ${columns.map(c => `
+            body.innerHTML = data.map((row, rIdx) => `
+                <tr id="r-${rIdx}">
+                    ${cols.map(c => `
                         <td>
                             <input type="${c==='实际数量'?'number':'text'}" 
-                                id="cell-${rIdx}-${c}"
+                                id="i-${rIdx}-${c}"
                                 value="${row[c]||''}" 
-                                class="${c==='实际数量'?'qty-input':'w-full h-8 px-1 outline-none bg-transparent'}"
-                                onchange="updateCell(${rIdx},'${c}',this.value)" />
+                                class="${c==='实际数量'?'qty-input':'w-full h-10 px-2 outline-none bg-transparent'}"
+                                onchange="saveVal(${rIdx},'${c}',this.value)" />
                         </td>`).join('')}
                 </tr>`).join('');
         }
 
-        // 文件加载逻辑（增强报错提示）
-        document.getElementById('fileInput').onchange = function(e) {
+        // 文件读取逻辑
+        document.getElementById('fileInput').onchange = (e) => {
             const file = e.target.files[0];
             const reader = new FileReader();
-            reader.onload = function(ev) {
+            reader.onload = (ev) => {
                 try {
-                    const data = ev.target.result;
-                    const workbook = XLSX.read(data, { type: 'binary' });
-                    const sheetName = workbook.SheetNames[0];
-                    const json = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { defval: "" });
-                    
-                    if (json.length === 0) { alert("文件是空的！"); return; }
-                    
-                    columns = Object.keys(json[0]);
-                    if (!columns.includes('实际数量')) columns.unshift('实际数量');
-                    inventory = json;
-                    save(); renderAll();
-                    alert("文件加载成功！共 " + json.length + " 条数据");
-                } catch (err) {
-                    alert("文件解析出错：" + err.message);
-                }
+                    const ab = ev.target.result;
+                    const wb = XLSX.read(ab, { type: 'array' });
+                    const sheet = wb.Sheets[wb.SheetNames[0]];
+                    const json = XLSX.utils.sheet_to_json(sheet, { defval: "" });
+                    if (json.length > 0) {
+                        cols = Object.keys(json[0]);
+                        if (!cols.includes('实际数量')) cols.unshift('实际数量');
+                        data = json;
+                        save(); render();
+                        alert("加载成功！共 " + json.length + " 行商品数据。");
+                    }
+                } catch (err) { alert("Excel读取失败: " + err.message); }
             };
-            reader.readAsBinaryString(file);
+            reader.readAsArrayBuffer(file);
         };
 
-        function processBarcode(code) {
-            const codeKey = columns.find(c => /条码|码|COD|Barcode/i.test(c)) || columns[0];
-            const idx = inventory.findIndex(r => String(r[codeKey]).trim() === String(code).trim());
-            
+        function processCode(code, fromScan = false) {
+            const k = cols.find(c => /条码|码|COD|Barcode/i.test(c)) || cols[0];
+            const idx = data.findIndex(r => String(r[k]).trim() === String(code).trim());
             if (idx !== -1) {
-                inventory[idx]['实际数量'] = (parseFloat(inventory[idx]['实际数量']) || 0) + 1;
-                save(); renderAll();
-                
-                const row = document.getElementById(`row-${idx}`);
-                const input = document.getElementById(`cell-${idx}-实际数量`);
+                data[idx]['实际数量'] = (parseFloat(data[idx]['实际数量']) || 0) + 1;
+                save(); render();
+                const row = document.getElementById(`r-${idx}`);
+                const input = document.getElementById(`i-${idx}-实际数量`);
                 row.scrollIntoView({ behavior: 'smooth', block: 'center' });
                 row.classList.add('row-blink');
-                setTimeout(() => { 
-                    row.classList.remove('row-blink');
-                    if(input) { input.focus(); input.select(); }
-                }, 1000);
-            } else {
-                alert("未找到条码: " + code);
-            }
+                setTimeout(() => row.classList.remove('row-blink'), 2000);
+                if (!fromScan && input) { input.focus(); input.select(); }
+                if (fromScan) {
+                    document.getElementById('scanTip').innerText = "已录入: " + code;
+                    setTimeout(() => document.getElementById('scanTip').innerText = "", 1000);
+                    beep();
+                }
+            } else { if (!fromScan) alert("未找到条码: " + code); }
             document.getElementById('manualInput').value = "";
         }
 
-        async function openScanner() {
-            document.getElementById('scannerModal').style.display = 'flex';
-            reader.decodeFromConstraints({ video: { facingMode: "environment" } }, 'video', (result) => {
-                if (result) {
-                    const audio = new AudioContext();
-                    const osc = audio.createOscillator();
-                    osc.connect(audio.destination);
-                    osc.start(); osc.stop(audio.currentTime + 0.1);
-                    processBarcode(result.getText());
-                }
+        async function startScan() {
+            document.getElementById('scanModal').style.display = 'flex';
+            codeReader.decodeFromConstraints({ video: { facingMode: "environment" } }, 'v', (res) => {
+                if (res) processCode(res.getText(), true);
             });
         }
 
-        function closeScanner() { reader.reset(); document.getElementById('scannerModal').style.display = 'none'; }
+        function stopScan() { codeReader.reset(); document.getElementById('scanModal').style.display = 'none'; }
         
-        let firstSwap = null;
-        function moveCol(c) {
-            if (!firstSwap) { firstSwap = c; alert("已选中 " + c + "，请点击另一列的交换按钮进行对调"); }
+        let sCol = null;
+        function swapCol(c) {
+            if (!sCol) { sCol = c; alert("已选 [" + c + "]，再点另一列的 [交换] 即可对调位置。"); }
             else {
-                const i1 = columns.indexOf(firstSwap);
-                const i2 = columns.indexOf(c);
-                [columns[i1], columns[i2]] = [columns[i2], columns[i1]];
-                firstSwap = null; save(); renderAll();
+                const i1 = cols.indexOf(sCol); const i2 = cols.indexOf(c);
+                [cols[i1], cols[i2]] = [cols[i2], cols[i1]];
+                sCol = null; save(); render();
             }
         }
 
-        function resizing(e, c) {
-            const startX = e.touches[0].pageX;
-            const startW = colWidths[c] || 140;
-            const move = (ev) => {
-                colWidths[c] = Math.max(60, startW + (ev.touches[0].pageX - startX));
-                renderAll();
-            };
+        function doResize(e, c) {
+            const startX = e.touches[0].pageX; const startW = wds[c] || 150;
+            const move = (ev) => { wds[c] = Math.max(60, startW + (ev.touches[0].pageX - startX)); render(); };
             const end = () => { document.removeEventListener('touchmove', move); save(); };
             document.addEventListener('touchmove', move, { passive: false });
             document.addEventListener('touchend', end, { once: true });
         }
 
-        function updateCell(r, c, v) { inventory[r][c] = v; save(); }
+        function beep() {
+            const c = new AudioContext(); const o = c.createOscillator();
+            o.connect(c.destination); o.start(); o.stop(c.currentTime + 0.1);
+            if (navigator.vibrate) navigator.vibrate(100);
+        }
+
+        function saveVal(r, c, v) { data[r][c] = v; save(); }
         function save() { 
-            localStorage.setItem('SR8_DATA', JSON.stringify(inventory)); 
-            localStorage.setItem('SR8_COLS', JSON.stringify(columns)); 
-            localStorage.setItem('SR8_WIDTHS', JSON.stringify(colWidths));
+            localStorage.setItem('SR9_DATA', JSON.stringify(data)); 
+            localStorage.setItem('SR9_COLS', JSON.stringify(cols)); 
+            localStorage.setItem('SR9_WDS', JSON.stringify(wds));
         }
-        function hardReset() { if(confirm("确定彻底清空系统数据吗？")) { localStorage.clear(); location.reload(); } }
-        function downloadExcel() {
-            const ws = XLSX.utils.json_to_sheet(inventory, { header: columns });
+        function clearEverything() { if(confirm("确定彻底清空？所有已录入数据将消失！")) { localStorage.clear(); location.reload(); } }
+        function exportExcel() {
+            const ws = XLSX.utils.json_to_sheet(data, { header: cols });
             const wb = XLSX.utils.book_new();
-            XLSX.utils.book_append_sheet(wb, ws, "Inventory");
-            XLSX.writeFile(wb, "SuperRapido_V8.xlsx");
+            XLSX.utils.book_append_sheet(wb, ws, "Sheet1");
+            XLSX.writeFile(wb, "Stock_Export.xlsx");
         }
-        document.getElementById('manualInput').onkeydown = (e) => e.key === 'Enter' && processBarcode(e.target.value);
-        renderAll();
+        document.getElementById('manualInput').onkeydown = (e) => e.key === 'Enter' && processCode(e.target.value);
     </script>
 </body>
 </html>
