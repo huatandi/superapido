@@ -1,248 +1,134 @@
-import React, { useState, useEffect, useRef } from "react";
-import * as XLSX from "xlsx";
-
-export default function InventoryApp() {
-  const [data, setData] = useState([]);
-  const [headers, setHeaders] = useState([]);
-  const [highlightIndex, setHighlightIndex] = useState(null);
-  const [searchValue, setSearchValue] = useState("");
-  const [colWidths, setColWidths] = useState({});
-  
-  const rowRefs = useRef([]);
-  const scanBuffer = useRef("");
-
-  // ✅ 提示音逻辑
-  const playSound = (type) => {
-    try {
-      const ctx = new (window.AudioContext || window.webkitAudioContext)();
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.connect(gain);
-      gain.connect(ctx.destination);
-      if (type === "success") {
-        osc.type = "sine";
-        osc.frequency.setValueAtTime(800, ctx.currentTime);
-        gain.gain.setValueAtTime(0.1, ctx.currentTime);
-        osc.start();
-        osc.stop(ctx.currentTime + 0.1);
-      } else {
-        osc.type = "square";
-        osc.frequency.setValueAtTime(150, ctx.currentTime);
-        gain.gain.setValueAtTime(0.1, ctx.currentTime);
-        osc.start();
-        osc.stop(ctx.currentTime + 0.3);
-      }
-    } catch (e) { console.log(e); }
-  };
-
-  const handleFile = (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    const reader = new FileReader();
-
-    reader.onload = (evt) => {
-      const workbook = XLSX.read(evt.target.result, { type: "binary" });
-      const sheet = workbook.Sheets[workbook.SheetNames[0]];
-      const json = XLSX.utils.sheet_to_json(sheet, { defval: "" });
-
-      if (!json || json.length === 0) return;
-
-      let cols = Object.keys(json[0]);
-      
-      // ✅ 初始排版逻辑：在 EMPTY_4 和 EMPTY_5 之间插入“实际数量”
-      const index4 = cols.indexOf("__EMPTY_4");
-      if (index4 !== -1) {
-        cols.splice(index4 + 1, 0, "实际数量");
-      } else {
-        cols.push("实际数量");
-      }
-
-      setHeaders(cols);
-      const initialWidths = {};
-      cols.forEach(h => initialWidths[h] = h === "实际数量" ? 120 : 150);
-      setColWidths(initialWidths);
-
-      const formatted = json.map((row) => {
-        const item = { raw: { ...row } };
-        item.raw["实际数量"] = "";
-        return item;
-      });
-      setData(formatted);
-    };
-    reader.readAsBinaryString(file);
-  };
-
-  // ✅ 功能：在指定列后面插入新列
-  const addColumn = (afterHeader) => {
-    const newColName = window.prompt("请输入新列的名称：", "备注");
-    if (!newColName || headers.includes(newColName)) {
-      if (headers.includes(newColName)) alert("列名已存在！");
-      return;
-    }
-
-    const newHeaders = [...headers];
-    const index = newHeaders.indexOf(afterHeader);
-    newHeaders.splice(index + 1, 0, newColName);
-    
-    setHeaders(newHeaders);
-    setColWidths(prev => ({ ...prev, [newColName]: 150 }));
-    
-    // 同步更新数据结构
-    const newData = data.map(item => ({
-      ...item,
-      raw: { ...item.raw, [newColName]: "" }
-    }));
-    setData(newData);
-  };
-
-  const handleMouseDown = (e, header) => {
-    const startX = e.pageX;
-    const startWidth = colWidths[header];
-    const onMouseMove = (moveEvent) => {
-      const currentWidth = startWidth + (moveEvent.pageX - startX);
-      setColWidths(prev => ({
-        ...prev,
-        [header]: currentWidth > 50 ? currentWidth : 50
-      }));
-    };
-    const onMouseUp = () => {
-      document.removeEventListener("mousemove", onMouseMove);
-      document.removeEventListener("mouseup", onMouseUp);
-    };
-    document.addEventListener("mousemove", onMouseMove);
-    document.addEventListener("mouseup", onMouseUp);
-  };
-
-  const updateCell = (rowIndex, key, value) => {
-    const newData = [...data];
-    newData[rowIndex].raw[key] = value;
-    setData(newData);
-  };
-
-  const performSearch = (code) => {
-    if (!code) return;
-    const barcodeKey = headers.find((h) =>
-      h.toLowerCase().includes("codigo") || h.toLowerCase().includes("barcode")
-    ) || headers[0];
-
-    const index = data.findIndex((item) => 
-      String(item.raw[barcodeKey] || "").trim() === code.trim()
-    );
-
-    if (index !== -1) {
-      setHighlightIndex(index);
-      rowRefs.current[index]?.scrollIntoView({ behavior: "smooth", block: "center" });
-      playSound("success");
-    } else {
-      playSound("error");
-    }
-    setSearchValue(""); 
-  };
-
-  useEffect(() => {
-    const handleKeyDown = (e) => {
-      if (e.target.tagName === "INPUT" && e.target.type !== "file") {
-        if (e.key === "Enter") performSearch(searchValue);
-        return;
-      }
-      if (e.key === "Enter") {
-        const code = scanBuffer.current.trim();
-        scanBuffer.current = "";
-        if (code) performSearch(code);
-      } else if (e.key.length === 1) {
-        scanBuffer.current += e.key;
-      }
-    };
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [data, headers, searchValue]);
-
-  return (
-    <div className="p-4 font-sans select-none">
-      <h1 className="text-xl font-bold mb-4 text-blue-900">超市盘点 - 增强功能版</h1>
-      
-      <div className="flex gap-4 mb-4 bg-gray-100 p-3 rounded">
-        <label className="bg-blue-600 text-white px-4 py-2 rounded shadow cursor-pointer">
-          📂 加载库存 Excel
-          <input type="file" onChange={handleFile} className="hidden" />
-        </label>
-        <input
-          type="text"
-          placeholder="🔍 扫描条码..."
-          value={searchValue}
-          onChange={(e) => setSearchValue(e.target.value)}
-          className="border-2 border-green-500 px-4 py-1 rounded w-64 outline-none bg-white"
-        />
-      </div>
-
-      <div className="overflow-auto border rounded shadow-sm" style={{ maxHeight: "72vh" }}>
-        <table className="border-collapse text-sm table-fixed" style={{ width: "fit-content" }}>
-          <thead className="sticky top-0 bg-gray-200 shadow z-20">
-            <tr>
-              {headers.map((h, i) => (
-                <th 
-                  key={i} 
-                  className="border px-2 py-2 text-left relative group"
-                  style={{ width: colWidths[h] || 150 }}
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="truncate pr-4">{h}</span>
-                    {/* ✅ 插入列按钮 */}
-                    <button 
-                      onClick={() => addColumn(h)}
-                      className="text-blue-600 font-bold px-1 hover:bg-blue-200 rounded text-xs"
-                      title="在此列后插入新列"
-                    >＋</button>
-                  </div>
-                  {/* 列宽拉伸柄 */}
-                  <div
-                    onMouseDown={(e) => handleMouseDown(e, h)}
-                    className="absolute right-0 top-0 h-full w-2 cursor-col-resize hover:bg-blue-400 z-30"
-                  />
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {data.map((item, index) => (
-              <tr 
-                key={index} 
-                ref={(el) => (rowRefs.current[index] = el)}
-                className={`transition-colors ${highlightIndex === index ? "bg-yellow-200" : "bg-white"}`}
-              >
-                {headers.map((h, i) => (
-                  <td key={i} className="border p-0" style={{ width: colWidths[h] || 150 }}>
-                    <input
-                      value={item.raw[h] || ""}
-                      onFocus={(e) => e.target.select()}
-                      onChange={(e) => updateCell(index, h, e.target.value)}
-                      type={h === "实际数量" ? "number" : "text"}
-                      inputMode={h === "实际数量" ? "decimal" : "text"}
-                      className={`w-full p-3 outline-none border-none focus:bg-blue-50 whitespace-nowrap overflow-hidden text-ellipsis ${
-                        h === "实际数量" ? "font-bold text-red-600 bg-red-50" : "bg-transparent"
-                      }`}
-                    />
-                  </td>
-                ))}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-      
-      <div className="mt-4 flex gap-4">
-        <button 
-          onClick={() => {
-            const ws = XLSX.utils.json_to_sheet(data.map(d => d.raw));
-            const wb = XLSX.utils.book_new();
-            XLSX.utils.book_append_sheet(wb, ws, "Sheet1");
-            XLSX.writeFile(wb, "盘点完成_含新增列.xlsx");
-          }}
-          className="bg-green-700 text-white px-8 py-3 rounded-lg font-bold shadow-lg"
-        >
-          💾 导出 Excel
-        </button>
-      </div>
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>SuperRapido V40.2</title>
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
+    <script src="https://unpkg.com/@zxing/library@0.19.1"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { background: #f8fafc; font-family: system-ui; height: 100vh; overflow: hidden; display: flex; flex-direction: column; }
+        .table-container { flex: 1; background: white; border: 2px solid #1e293b; overflow: auto; border-radius: 12px; margin: 5px; }
+        table { border-collapse: separate; border-spacing: 0; table-layout: fixed; width: max-content; }
+        th { position: sticky; top: 0; z-index: 50; background: #0f172a; color: white; padding: 10px; font-size: 13px; text-align: left; }
+        td { border-right: 1px solid #e2e8f0; border-bottom: 1px solid #e2e8f0; padding: 2px; }
+        .qty-input { width: 100%; height: 55px; border: 4px solid #2563eb !important; text-align: center; font-size: 2rem; font-weight: 900; color: #1e40af; border-radius: 8px; }
+        .row-focus { background-color: #fef08a !important; outline: 5px solid #ef4444; outline-offset: -5px; }
+        #scanUI { position: fixed; inset: 0; background: #000; z-index: 9999; display: none; flex-direction: column; }
+        video { width: 100%; height: 100%; object-fit: cover; }
+    </style>
+</head>
+<body class="p-1">
+    <div class="flex gap-2 mb-2 bg-white p-2 rounded-xl shadow border items-center">
+        <button onclick="startScan()" class="bg-blue-600 text-white w-16 h-16 rounded-xl flex items-center justify-center text-3xl shadow-lg shrink-0">📷</button>
+        <div class="flex-1 flex flex-col gap-1">
+            <div class="flex gap-1">
+                <input type="text" id="mIn" placeholder="条码..." class="flex-1 border-2 border-blue-400 rounded-lg px-2 h-9 font-bold outline-none text-sm" />
+                <button onclick="checkCode(mIn.value)" class="bg-slate-800 text-white px-3 rounded-lg font-bold text-xs h-9">确认</button>
+            </div>
+            <label class="bg-slate-50 text-slate-500 h-6 flex items-center justify-center rounded border border-dashed border-slate-300 text-[10px] font-bold cursor-pointer">
+                📂 导入 EXCEL <input type="file" id="fIn" class="hidden" accept=".xlsx, .xls" />
+            </label>
+        </div>
+        <button onclick="if(confirm('清空？')) {localStorage.clear(); location.reload();}" class="bg-red-500 text-white px-2 py-1 rounded text-[10px]">重置</button>
     </div>
-  );
-}
+
+    <div class="table-container shadow-xl">
+        <table id="mainTable"><thead id="th"></thead><tbody id="tb"></tbody></table>
+    </div>
+
+    <button onclick="exportExcel()" class="m-1 bg-emerald-700 text-white py-4 rounded-xl font-black text-xl shadow-lg">💾 保存导出 Excel</button>
+
+    <div id="scanUI">
+        <div class="p-4 flex justify-between bg-slate-900 text-white font-bold">
+            <span>正在扫描 (请对准条码)</span>
+            <button onclick="stopScan()" class="bg-red-600 px-8 py-1 rounded-full">退出</button>
+        </div>
+        <div class="flex-1 relative">
+            <video id="v" playsinline webkit-playsinline muted autoplay></video>
+        </div>
+    </div>
+
+    <script>
+        const KEY = "V40_STABLE_FINAL";
+        let db = JSON.parse(localStorage.getItem(KEY)) || [];
+        let cols = JSON.parse(localStorage.getItem(KEY+'_C')) || [];
+        const reader = new ZXing.BrowserMultiFormatReader();
+
+        // 导入逻辑
+        document.getElementById('fIn').onchange = (e) => {
+            const f = e.target.files[0]; if(!f) return;
+            const fr = new FileReader();
+            fr.onload = (ev) => {
+                const b = new Uint8Array(ev.target.result);
+                const w = XLSX.read(b, {type:'array'});
+                const j = XLSX.utils.sheet_to_json(w.Sheets[w.SheetNames[0]], {defval:""});
+                if(j.length){
+                    cols = Object.keys(j[0]);
+                    if(!cols.includes('实际数量')) cols.unshift('实际数量');
+                    db = j; save(); render();
+                }
+            };
+            fr.readAsArrayBuffer(f);
+        };
+
+        // 摄像头逻辑：强制开启播放
+        async function startScan() {
+            const ui = document.getElementById('scanUI');
+            const v = document.getElementById('v');
+            ui.style.display = 'flex';
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({video:{facingMode:"environment"}});
+                v.srcObject = stream;
+                v.onloadedmetadata = () => {
+                    v.play();
+                    reader.decodeFromStream(stream, 'v', (res) => {
+                        if(res) { checkCode(res.getText()); stopScan(); }
+                    });
+                };
+            } catch(e) { alert("请在浏览器设置中允许摄像头权限"); stopScan(); }
+        }
+
+        function stopScan() {
+            reader.reset();
+            const v = document.getElementById('v');
+            if(v.srcObject) v.srcObject.getTracks().forEach(t => t.stop());
+            document.getElementById('scanUI').style.display = 'none';
+        }
+
+        function checkCode(c) {
+            if(!c) return;
+            const t = String(c).trim().toLowerCase();
+            const i = db.findIndex(r => Object.values(r).some(v => String(v).toLowerCase() === t));
+            if(i !== -1) {
+                render();
+                const rEl = document.getElementById('r-'+i);
+                const iEl = document.getElementById('i-'+i);
+                rEl.scrollIntoView({behavior:'smooth', block:'center'});
+                rEl.classList.add('row-focus');
+                setTimeout(() => { if(iEl){iEl.focus(); iEl.select();} }, 300);
+            } else { alert("未找到条码: " + c); }
+            mIn.value = "";
+        }
+
+        function render() {
+            if(!cols.length) return;
+            document.getElementById('th').innerHTML = `<tr>${cols.map(c => `<th>${c}</th>`).join('')}</tr>`;
+            document.getElementById('tb').innerHTML = db.map((r, i) => `
+                <tr id="r-${i}">${cols.map(c => `<td><input id="${c==='实际数量'?'i-'+i:''}" type="${c==='实际数量'?'number':'text'}" 
+                class="${c==='实际数量'?'qty-input':'p-2 w-full text-xs outline-none'}" 
+                value="${r[c]||''}" onchange="db[${i}]['${c}']=this.value;save();" /></td>`).join('')}</tr>`).join('');
+        }
+
+        function save() { localStorage.setItem(KEY, JSON.stringify(db)); localStorage.setItem(KEY+'_C', JSON.stringify(cols)); }
+        function exportExcel() {
+            const ws = XLSX.utils.json_to_sheet(db, {header:cols});
+            const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, "Inventory");
+            XLSX.writeFile(wb, `Stock_${new Date().getTime()}.xlsx`);
+        }
+        if(cols.length) render();
+        mIn.onkeydown = (e) => { if(e.key==='Enter') checkCode(e.target.value); };
+    </script>
+</body>
+</html>
