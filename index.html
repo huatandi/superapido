@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
-    <title>SuperRapido V35 - 扫码修正版</title>
+    <title>SuperRapido V36 - 强化扫码版</title>
     <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
     <script src="https://unpkg.com/@zxing/library@0.19.1"></script>
     <script src="https://cdn.tailwindcss.com"></script>
@@ -18,6 +18,10 @@
         .row-focus { background-color: #fef08a !important; outline: 6px solid #ef4444; outline-offset: -6px; }
         #toast { position: fixed; top: 15%; left: 50%; transform: translateX(-50%); color: white; padding: 20px; border-radius: 20px; z-index: 10000; display: none; font-weight: 900; text-align: center; width: 80%; box-shadow: 0 10px 40px rgba(0,0,0,0.6); }
         #colModal { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.85); z-index:9999; align-items:center; justify-content:center; }
+        /* 扫码框辅助线 */
+        .scan-overlay { position: absolute; inset: 0; border: 2px solid rgba(34,197,94,0.3); box-shadow: inset 0 0 100px rgba(0,0,0,0.5); pointer-events: none; }
+        .scan-line { position: absolute; width: 100%; height: 2px; background: #22c55e; top: 50%; animation: scanMove 2s infinite; }
+        @keyframes scanMove { 0% { top: 20%; } 100% { top: 80%; } }
     </style>
 </head>
 <body class="p-2">
@@ -25,7 +29,7 @@
 
     <div id="colModal">
         <div class="bg-white w-11/12 max-h-[85vh] rounded-3xl p-6 overflow-auto border-4 border-slate-900 shadow-2xl">
-            <h2 class="text-2xl font-black mb-4 border-b-2 pb-2">列管理 / Gestión</h2>
+            <h2 class="text-2xl font-black mb-4 border-b-2 pb-2 text-slate-800">列管理 / Gestión</h2>
             <div id="colList" class="space-y-2 mb-6"></div>
             <div class="flex gap-2 p-3 bg-slate-100 rounded-2xl border-2">
                 <input type="text" id="newColName" placeholder="新列名称..." class="flex-1 bg-transparent font-bold outline-none text-lg" />
@@ -37,10 +41,10 @@
 
     <div class="flex flex-col h-screen">
         <div class="flex justify-between items-center mb-2">
-            <h1 class="text-xl font-black text-slate-900">V35 <span class="bg-indigo-600 text-white text-[10px] px-2 py-0.5 rounded ml-1 font-mono uppercase">Scan Fixed</span></h1>
+            <h1 class="text-xl font-black text-slate-900">V36 <span class="bg-green-600 text-white text-[10px] px-2 py-0.5 rounded ml-1 font-mono uppercase">Scan Turbo</span></h1>
             <div class="flex gap-2">
-                <button onclick="openColModal()" class="bg-slate-700 text-white text-xs px-3 py-2 rounded-full font-bold shadow-md">列管理</button>
-                <button onclick="hardReset()" class="bg-red-600 text-white text-xs px-3 py-2 rounded-full font-bold shadow-md">清空重置</button>
+                <button onclick="openColModal()" class="bg-slate-700 text-white text-xs px-3 py-2 rounded-full font-bold">列管理</button>
+                <button onclick="hardReset()" class="bg-red-600 text-white text-xs px-3 py-2 rounded-full font-bold">清空重置</button>
             </div>
         </div>
 
@@ -68,12 +72,15 @@
             <span class="font-bold text-green-400 italic font-mono">SCANNING...</span>
             <button onclick="stopScanning()" class="bg-red-600 px-8 py-2 rounded-full font-bold">退出</button>
         </div>
-        <video id="v" class="flex-1 object-cover bg-black"></video>
+        <div class="relative flex-1 overflow-hidden">
+            <video id="v" class="w-full h-full object-cover"></video>
+            <div class="scan-overlay"></div>
+            <div class="scan-line"></div>
+        </div>
     </div>
 
     <script>
-        // 版本锁死
-        const VER = "SR35_GOLD_FIX";
+        const VER = "SR36_TURBO_SCAN";
         let db = JSON.parse(localStorage.getItem(VER+'_DATA')) || [];
         let columns = JSON.parse(localStorage.getItem(VER+'_COLS')) || [];
         let widths = JSON.parse(localStorage.getItem(VER+'_W')) || {};
@@ -90,7 +97,7 @@
             osc.start(); osc.stop(audioCtx.currentTime + 0.2);
         }
 
-        // 文件加载逻辑
+        // 文件导入逻辑
         document.getElementById('fileInput').onchange = (e) => {
             const file = e.target.files[0];
             if (!file) return;
@@ -111,7 +118,7 @@
             r.readAsArrayBuffer(file);
         };
 
-        // 扫码处理核心
+        // 统一业务逻辑处理
         function handleBarcode(code) {
             if(!code) return;
             const target = String(code).trim().toLowerCase();
@@ -133,18 +140,37 @@
 
         document.getElementById('manualInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') handleBarcode(e.target.value); });
 
-        // --- 修正重点：摄像头自动解码逻辑 ---
+        // --- 核心修复：更强力的扫码调用 ---
         async function startScanning() {
             if (audioCtx.state === 'suspended') audioCtx.resume();
             document.getElementById('scanUI').style.display = 'flex';
-            
-            // 使用 decodeFromVideoDevice 以确保自动识别
-            zxing.decodeFromVideoDevice(null, 'v', (res, err) => {
-                if (res) {
-                    handleBarcode(res.getText());
+
+            const constraints = {
+                video: {
+                    facingMode: "environment",
+                    width: { ideal: 1280 },
+                    height: { ideal: 720 },
+                    frameRate: { ideal: 60 }
                 }
-                // err 仅代表当前帧未识别到，无需报错
-            });
+            };
+
+            try {
+                // 先获取所有视频设备
+                const videoDevices = await zxing.listVideoInputDevices();
+                // 选定后置摄像头（通常是列表最后一个或带back字样的）
+                const backCamera = videoDevices.find(device => device.label.toLowerCase().includes('back')) || videoDevices[0];
+                const deviceId = backCamera ? backCamera.deviceId : undefined;
+
+                zxing.decodeFromVideoDevice(deviceId, 'v', (res, err) => {
+                    if (res) {
+                        console.log("扫码成功:", res.getText());
+                        handleBarcode(res.getText());
+                    }
+                });
+            } catch (err) {
+                console.error("相机启动错误:", err);
+                showMsg("❌ 无法开启摄像头，请检查权限");
+            }
         }
 
         function stopScanning() { zxing.reset(); document.getElementById('scanUI').style.display = 'none'; }
