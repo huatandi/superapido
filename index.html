@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
-    <title>SuperRapido V37 - 极速对焦版</title>
+    <title>SuperRapido V38 - 巨型按钮 & 极速扫描</title>
     <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
     <script src="https://unpkg.com/@zxing/library@0.19.1"></script>
     <script src="https://cdn.tailwindcss.com"></script>
@@ -18,10 +18,14 @@
         .row-focus { background-color: #fef08a !important; outline: 6px solid #ef4444; outline-offset: -6px; }
         #toast { position: fixed; top: 15%; left: 50%; transform: translateX(-50%); color: white; padding: 20px; border-radius: 20px; z-index: 10000; display: none; font-weight: 900; text-align: center; width: 80%; box-shadow: 0 10px 40px rgba(0,0,0,0.6); }
         #colModal { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.85); z-index:9999; align-items:center; justify-content:center; }
-        /* 扫描遮罩优化 */
-        .scan-frame { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 260px; height: 160px; border: 4px solid #22c55e; border-radius: 20px; box-shadow: 0 0 0 2000px rgba(0,0,0,0.6); z-index: 10; pointer-events: none; }
-        .scan-line { position: absolute; width: 100%; height: 3px; background: #22c55e; top: 0; animation: scanLineMove 1.5s infinite linear; }
+        
+        /* 扫描辅助 */
+        .scan-frame { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 280px; height: 180px; border: 4px solid #22c55e; border-radius: 20px; box-shadow: 0 0 0 2000px rgba(0,0,0,0.6); z-index: 10; pointer-events: none; }
+        .scan-line { position: absolute; width: 100%; height: 3px; background: #22c55e; top: 0; animation: scanLineMove 1.2s infinite linear; }
         @keyframes scanLineMove { 0% { top: 5%; opacity: 0; } 50% { opacity: 1; } 100% { top: 95%; opacity: 0; } }
+
+        /* [新] 巨型摄像头按键样式 */
+        .giant-cam-btn { width: 85px !important; height: 85px !important; font-size: 40px !important; flex-shrink: 0; box-shadow: 0 8px 20px rgba(37, 99, 235, 0.4); border: 4px solid white; }
     </style>
 </head>
 <body class="p-2">
@@ -41,23 +45,26 @@
 
     <div class="flex flex-col h-screen">
         <div class="flex justify-between items-center mb-2">
-            <h1 class="text-xl font-black text-slate-900">V37 <span class="bg-orange-500 text-white text-[10px] px-2 py-0.5 rounded ml-1 uppercase">Quick Focus</span></h1>
+            <h1 class="text-xl font-black text-slate-900">V38 <span class="bg-blue-600 text-white text-[10px] px-2 py-0.5 rounded ml-1 uppercase tracking-widest">Ultra Scan</span></h1>
             <div class="flex gap-2">
                 <button onclick="openColModal()" class="bg-slate-700 text-white text-xs px-3 py-2 rounded-full font-bold shadow-md">列管理</button>
                 <button onclick="hardReset()" class="bg-red-600 text-white text-xs px-3 py-2 rounded-full font-bold shadow-md">清空重置</button>
             </div>
         </div>
 
-        <div class="flex gap-1 mb-3 bg-white p-2 rounded-2xl shadow-lg border-2 border-slate-200">
-            <button onclick="startScanning()" class="bg-blue-600 text-white w-14 h-14 flex items-center justify-center rounded-xl active:scale-95 text-2xl">📷</button>
-            <div class="flex-1 flex gap-1">
-                <input type="text" id="manualInput" placeholder="点击这里可用扫码枪..." autofocus
-                    class="flex-1 border-4 border-blue-50/50 rounded-xl px-3 font-bold outline-none focus:border-blue-500 text-lg" />
-                <button onclick="handleBarcode(manualInput.value)" class="bg-slate-800 text-white px-4 rounded-xl font-black text-xs">确认</button>
+        <div class="flex gap-2 mb-3 bg-white p-2 rounded-2xl shadow-lg border-2 border-slate-200 items-center">
+            <button onclick="startScanning()" class="bg-blue-600 text-white rounded-2xl active:scale-90 flex items-center justify-center giant-cam-btn">📷</button>
+            
+            <div class="flex-1 flex flex-col gap-1">
+                <div class="flex gap-1">
+                    <input type="text" id="manualInput" placeholder="点击此处使用扫码枪..." autofocus
+                        class="flex-1 border-4 border-blue-50/50 rounded-xl px-3 h-14 font-bold outline-none focus:border-blue-500 text-lg" />
+                    <button onclick="handleBarcode(manualInput.value)" class="bg-slate-800 text-white px-4 rounded-xl font-black text-xs h-14">确认</button>
+                </div>
+                <label class="bg-slate-100 text-slate-500 h-10 flex items-center justify-center rounded-xl border-2 border-dashed border-slate-300 text-sm font-bold">
+                    📂 导入 EXCEL <input type="file" id="fileInput" class="hidden" accept=".xlsx, .xls" />
+                </label>
             </div>
-            <label class="bg-slate-100 text-slate-500 w-12 h-14 flex items-center justify-center rounded-xl border-2 border-dashed border-slate-300">
-                📂<input type="file" id="fileInput" class="hidden" accept=".xlsx, .xls" />
-            </label>
         </div>
 
         <div class="table-container shadow-2xl">
@@ -68,34 +75,32 @@
     </div>
 
     <div id="scanUI" class="fixed inset-0 bg-black z-[999] hidden flex-col">
-        <div class="p-4 flex justify-between items-center bg-slate-900 text-white border-b-2 border-orange-500">
-            <span class="font-bold text-orange-400 italic">自动对焦中...</span>
+        <div class="p-4 flex justify-between items-center bg-slate-900 text-white border-b-2 border-blue-500">
+            <span class="font-bold text-blue-400 italic">灵敏扫描模式开启...</span>
             <button onclick="stopScanning()" class="bg-red-600 px-8 py-2 rounded-full font-bold">关闭</button>
         </div>
         <div class="relative flex-1 overflow-hidden bg-black">
-            <video id="v" class="w-full h-full object-cover shadow-inner" playsinline></video>
-            <div class="scan-frame">
-                <div class="scan-line"></div>
-            </div>
-            <div class="absolute bottom-10 left-0 right-0 text-center text-white text-sm font-bold bg-black/40 py-2">
-                请将条码置于绿框内，保持稳定
-            </div>
+            <video id="v" class="w-full h-full object-cover" playsinline></video>
+            <div class="scan-frame"><div class="scan-line"></div></div>
         </div>
     </div>
 
     <script>
-        const VER = "SR37_QUICK_FOCUS";
+        const VER = "SR38_ULTRA_SCAN";
         let db = JSON.parse(localStorage.getItem(VER+'_DATA')) || [];
         let columns = JSON.parse(localStorage.getItem(VER+'_COLS')) || [];
         let widths = JSON.parse(localStorage.getItem(VER+'_W')) || {};
 
-        // 优化：配置 ZXing 提示，使其更关注条码格式
+        // --- 灵敏度核心调优 ---
         const hints = new Map();
         hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, [
-            ZXing.BarcodeFormat.EAN_13,
-            ZXing.BarcodeFormat.CODE_128,
+            ZXing.BarcodeFormat.EAN_13, 
+            ZXing.BarcodeFormat.EAN_8,
+            ZXing.BarcodeFormat.CODE_128, 
             ZXing.BarcodeFormat.UPC_A
         ]);
+        hints.set(ZXing.DecodeHintType.TRY_HARDER, true); // [重点] 开启深度扫描模式
+        
         const zxing = new ZXing.BrowserMultiFormatReader(hints);
         const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
 
@@ -108,7 +113,7 @@
             osc.start(); osc.stop(audioCtx.currentTime + 0.2);
         }
 
-        // 文件加载逻辑 (保持完整)
+        // 文件加载逻辑 (不动)
         document.getElementById('fileInput').onchange = (e) => {
             const file = e.target.files[0];
             if (!file) return;
@@ -145,44 +150,27 @@
                     setTimeout(() => { if(inputEl){inputEl.focus(); inputEl.select();} }, 300);
                 }
                 stopScanning();
-            } else { playFeedback(false); showMsg("⚠️ 未找到条码: " + target); }
+            } else { playFeedback(false); showMsg("⚠️ 未找到: " + target); }
         }
 
         document.getElementById('manualInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') handleBarcode(e.target.value); });
 
-        // --- 核心修复：强制对焦启动 ---
         async function startScanning() {
             if (audioCtx.state === 'suspended') audioCtx.resume();
             document.getElementById('scanUI').style.display = 'flex';
-
             try {
                 const videoDevices = await zxing.listVideoInputDevices();
                 const backCamera = videoDevices.find(device => device.label.toLowerCase().includes('back')) || videoDevices[0];
-                
-                // 强制对焦参数
                 const constraints = {
-                    video: {
-                        deviceId: backCamera.deviceId,
-                        facingMode: "environment",
-                        focusMode: "continuous", // 关键：请求持续对焦
-                        whiteBalanceMode: "continuous"
-                    }
+                    video: { deviceId: backCamera.deviceId, facingMode: "environment", focusMode: "continuous" }
                 };
-
-                zxing.decodeFromConstraints(constraints, 'v', (res, err) => {
-                    if (res) {
-                        handleBarcode(res.getText());
-                    }
-                });
-            } catch (err) {
-                showMsg("❌ 无法开启摄像头，请检查权限");
-                stopScanning();
-            }
+                zxing.decodeFromConstraints(constraints, 'v', (res) => { if (res) handleBarcode(res.getText()); });
+            } catch (err) { showMsg("❌ 无法开启摄像头"); stopScanning(); }
         }
 
         function stopScanning() { zxing.reset(); document.getElementById('scanUI').style.display = 'none'; }
 
-        // 列管理 (移动/增删逻辑保持不变)
+        // 列管理/拉伸逻辑 (不动)
         function openColModal() { document.getElementById('colModal').style.display = 'flex'; renderColList(); }
         function closeColModal() { document.getElementById('colModal').style.display = 'none'; }
         function renderColList() {
