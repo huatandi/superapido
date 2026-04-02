@@ -1,134 +1,153 @@
+
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>SuperRapido V40.2</title>
-    <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
-    <script src="https://unpkg.com/@zxing/library@0.19.1"></script>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <style>
-        body { background: #f8fafc; font-family: system-ui; height: 100vh; overflow: hidden; display: flex; flex-direction: column; }
-        .table-container { flex: 1; background: white; border: 2px solid #1e293b; overflow: auto; border-radius: 12px; margin: 5px; }
-        table { border-collapse: separate; border-spacing: 0; table-layout: fixed; width: max-content; }
-        th { position: sticky; top: 0; z-index: 50; background: #0f172a; color: white; padding: 10px; font-size: 13px; text-align: left; }
-        td { border-right: 1px solid #e2e8f0; border-bottom: 1px solid #e2e8f0; padding: 2px; }
-        .qty-input { width: 100%; height: 55px; border: 4px solid #2563eb !important; text-align: center; font-size: 2rem; font-weight: 900; color: #1e40af; border-radius: 8px; }
-        .row-focus { background-color: #fef08a !important; outline: 5px solid #ef4444; outline-offset: -5px; }
-        #scanUI { position: fixed; inset: 0; background: #000; z-index: 9999; display: none; flex-direction: column; }
-        video { width: 100%; height: 100%; object-fit: cover; }
-    </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
+<title>SuperRapido V40 - 扫码稳健版</title>
+
+<script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
+<script src="https://unpkg.com/@zxing/library@0.19.1"></script>
+<script src="https://cdn.tailwindcss.com"></script>
+
+<style>
+body { background-color: #f8fafc; touch-action: pan-x pan-y; font-family: system-ui; }
+.table-container { background: white; border: 2px solid #1e293b; height: 60vh; overflow: auto; border-radius: 12px; position: relative; }
+table { border-collapse: separate; border-spacing: 0; table-layout: fixed; width: max-content; }
+th { position: sticky; top: 0; z-index: 50; background: #0f172a; color: white; border-right: 1px solid #334155; border-bottom: 3px solid #000; padding: 12px; font-size: 13px; text-align: left; }
+.resizer { position: absolute; right: 0; top: 0; height: 100%; width: 15px; cursor: col-resize; z-index: 60; }
+td { border-right: 1px solid #e2e8f0; border-bottom: 1px solid #e2e8f0; padding: 2px; }
+.qty-input { width: 100%; height: 65px; border: 4px solid #2563eb !important; text-align: center; font-size: 2.2rem; font-weight: 900; color: #1e40af; border-radius: 8px; background: #fff; }
+.row-focus { background-color: #fef08a !important; outline: 6px solid #ef4444; outline-offset: -6px; }
+#toast { position: fixed; top: 15%; left: 50%; transform: translateX(-50%); color: white; padding: 20px; border-radius: 20px; z-index: 10000; display: none; font-weight: 900; text-align: center; width: 80%; box-shadow: 0 10px 40px rgba(0,0,0,0.6); }
+#colModal { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.85); z-index:9999; align-items:center; justify-content:center; }
+.scan-frame { position: absolute; top: 40%; left: 50%; transform: translate(-50%, -50%); width: 300px; height: 180px; border: 5px solid #3b82f6; border-radius: 20px; box-shadow: 0 0 0 2000px rgba(0,0,0,0.7); z-index: 10; pointer-events: none; }
+.scan-line { position: absolute; width: 100%; height: 4px; background: #3b82f6; top: 0; animation: scanLineMove 1s infinite linear; box-shadow: 0 0 15px #3b82f6; }
+@keyframes scanLineMove { 0% { top: 5%; } 100% { top: 95%; } }
+.giant-cam-btn { width: 90px !important; height: 90px !important; font-size: 45px !important; flex-shrink: 0; box-shadow: 0 8px 25px rgba(37, 99, 235, 0.5); border: 4px solid white; }
+</style>
 </head>
-<body class="p-1">
-    <div class="flex gap-2 mb-2 bg-white p-2 rounded-xl shadow border items-center">
-        <button onclick="startScan()" class="bg-blue-600 text-white w-16 h-16 rounded-xl flex items-center justify-center text-3xl shadow-lg shrink-0">📷</button>
-        <div class="flex-1 flex flex-col gap-1">
-            <div class="flex gap-1">
-                <input type="text" id="mIn" placeholder="条码..." class="flex-1 border-2 border-blue-400 rounded-lg px-2 h-9 font-bold outline-none text-sm" />
-                <button onclick="checkCode(mIn.value)" class="bg-slate-800 text-white px-3 rounded-lg font-bold text-xs h-9">确认</button>
-            </div>
-            <label class="bg-slate-50 text-slate-500 h-6 flex items-center justify-center rounded border border-dashed border-slate-300 text-[10px] font-bold cursor-pointer">
-                📂 导入 EXCEL <input type="file" id="fIn" class="hidden" accept=".xlsx, .xls" />
-            </label>
-        </div>
-        <button onclick="if(confirm('清空？')) {localStorage.clear(); location.reload();}" class="bg-red-500 text-white px-2 py-1 rounded text-[10px]">重置</button>
-    </div>
 
-    <div class="table-container shadow-xl">
-        <table id="mainTable"><thead id="th"></thead><tbody id="tb"></tbody></table>
-    </div>
+<body class="p-2">
 
-    <button onclick="exportExcel()" class="m-1 bg-emerald-700 text-white py-4 rounded-xl font-black text-xl shadow-lg">💾 保存导出 Excel</button>
+<div id="toast"></div>
 
-    <div id="scanUI">
-        <div class="p-4 flex justify-between bg-slate-900 text-white font-bold">
-            <span>正在扫描 (请对准条码)</span>
-            <button onclick="stopScan()" class="bg-red-600 px-8 py-1 rounded-full">退出</button>
-        </div>
-        <div class="flex-1 relative">
-            <video id="v" playsinline webkit-playsinline muted autoplay></video>
-        </div>
-    </div>
+<div class="flex flex-col h-screen">
 
-    <script>
-        const KEY = "V40_STABLE_FINAL";
-        let db = JSON.parse(localStorage.getItem(KEY)) || [];
-        let cols = JSON.parse(localStorage.getItem(KEY+'_C')) || [];
-        const reader = new ZXing.BrowserMultiFormatReader();
+<div class="flex gap-2 mb-3 bg-white p-2 rounded-2xl shadow-lg border-2 border-slate-200 items-center">
+<button onclick="startScanning()" class="bg-blue-600 text-white rounded-2xl giant-cam-btn">📷</button>
 
-        // 导入逻辑
-        document.getElementById('fIn').onchange = (e) => {
-            const f = e.target.files[0]; if(!f) return;
-            const fr = new FileReader();
-            fr.onload = (ev) => {
-                const b = new Uint8Array(ev.target.result);
-                const w = XLSX.read(b, {type:'array'});
-                const j = XLSX.utils.sheet_to_json(w.Sheets[w.SheetNames[0]], {defval:""});
-                if(j.length){
-                    cols = Object.keys(j[0]);
-                    if(!cols.includes('实际数量')) cols.unshift('实际数量');
-                    db = j; save(); render();
-                }
-            };
-            fr.readAsArrayBuffer(f);
-        };
+<div class="flex-1 flex flex-col gap-1">
+<div class="flex gap-1">
+<input type="text" id="manualInput" placeholder="扫码枪输入..." autofocus
+class="flex-1 border-4 border-blue-100 rounded-xl px-3 h-14 font-bold outline-none focus:border-blue-600 text-lg" />
+<button onclick="handleBarcode(manualInput.value)" class="bg-slate-800 text-white px-4 rounded-xl font-black text-xs h-14">确认</button>
+</div>
+</div>
+</div>
 
-        // 摄像头逻辑：强制开启播放
-        async function startScan() {
-            const ui = document.getElementById('scanUI');
-            const v = document.getElementById('v');
-            ui.style.display = 'flex';
-            try {
-                const stream = await navigator.mediaDevices.getUserMedia({video:{facingMode:"environment"}});
-                v.srcObject = stream;
-                v.onloadedmetadata = () => {
-                    v.play();
-                    reader.decodeFromStream(stream, 'v', (res) => {
-                        if(res) { checkCode(res.getText()); stopScan(); }
-                    });
-                };
-            } catch(e) { alert("请在浏览器设置中允许摄像头权限"); stopScan(); }
-        }
+<div class="table-container">
+<table id="mainTable">
+<thead id="tHead"></thead>
+<tbody id="tBody"></tbody>
+</table>
+</div>
 
-        function stopScan() {
-            reader.reset();
-            const v = document.getElementById('v');
-            if(v.srcObject) v.srcObject.getTracks().forEach(t => t.stop());
-            document.getElementById('scanUI').style.display = 'none';
-        }
+</div>
 
-        function checkCode(c) {
-            if(!c) return;
-            const t = String(c).trim().toLowerCase();
-            const i = db.findIndex(r => Object.values(r).some(v => String(v).toLowerCase() === t));
-            if(i !== -1) {
-                render();
-                const rEl = document.getElementById('r-'+i);
-                const iEl = document.getElementById('i-'+i);
-                rEl.scrollIntoView({behavior:'smooth', block:'center'});
-                rEl.classList.add('row-focus');
-                setTimeout(() => { if(iEl){iEl.focus(); iEl.select();} }, 300);
-            } else { alert("未找到条码: " + c); }
-            mIn.value = "";
-        }
+<div id="scanUI" class="fixed inset-0 bg-black z-[999] hidden flex-col">
+<video id="v" class="w-full h-full object-cover" playsinline></video>
+</div>
 
-        function render() {
-            if(!cols.length) return;
-            document.getElementById('th').innerHTML = `<tr>${cols.map(c => `<th>${c}</th>`).join('')}</tr>`;
-            document.getElementById('tb').innerHTML = db.map((r, i) => `
-                <tr id="r-${i}">${cols.map(c => `<td><input id="${c==='实际数量'?'i-'+i:''}" type="${c==='实际数量'?'number':'text'}" 
-                class="${c==='实际数量'?'qty-input':'p-2 w-full text-xs outline-none'}" 
-                value="${r[c]||''}" onchange="db[${i}]['${c}']=this.value;save();" /></td>`).join('')}</tr>`).join('');
-        }
+<script>
 
-        function save() { localStorage.setItem(KEY, JSON.stringify(db)); localStorage.setItem(KEY+'_C', JSON.stringify(cols)); }
-        function exportExcel() {
-            const ws = XLSX.utils.json_to_sheet(db, {header:cols});
-            const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, "Inventory");
-            XLSX.writeFile(wb, `Stock_${new Date().getTime()}.xlsx`);
-        }
-        if(cols.length) render();
-        mIn.onkeydown = (e) => { if(e.key==='Enter') checkCode(e.target.value); };
-    </script>
+const hints = new Map();
+hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, [
+ZXing.BarcodeFormat.EAN_13,
+ZXing.BarcodeFormat.EAN_8,
+ZXing.BarcodeFormat.CODE_128,
+ZXing.BarcodeFormat.UPC_A,
+ZXing.BarcodeFormat.CODE_39
+]);
+hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
+hints.set(ZXing.DecodeHintType.ALSO_INVERTED, true);
+
+const zxing = new ZXing.BrowserMultiFormatReader(hints);
+
+// ✅ 防抖
+let lastScanTime = 0;
+let lastScanCode = "";
+const SCAN_COOLDOWN = 600;
+
+let currentStream = null;
+
+function handleBarcode(code, isFromCamera = false) {
+
+const now = Date.now();
+const cleaned = String(code || '').trim();
+
+if (isFromCamera) {
+if (cleaned === lastScanCode && (now - lastScanTime) < SCAN_COOLDOWN) {
+return;
+}
+lastScanCode = cleaned;
+lastScanTime = now;
+}
+
+alert("扫描到: " + cleaned); // 示例
+
+}
+
+async function startScanning() {
+
+document.getElementById('scanUI').style.display = 'flex';
+
+try {
+
+const video = document.getElementById('v');
+
+video.setAttribute('playsinline', true);
+video.setAttribute('muted', true);
+video.setAttribute('autoplay', true);
+
+const stream = await navigator.mediaDevices.getUserMedia({
+audio: false,
+video: {
+facingMode: { ideal: "environment" },
+width: { ideal: 1280 },
+height: { ideal: 720 }
+}
+});
+
+currentStream = stream;
+
+video.srcObject = stream;
+await video.play();
+
+setTimeout(() => {
+zxing.decodeFromVideoElement(video, (res) => {
+if (res) handleBarcode(res.getText(), true);
+});
+}, 300);
+
+} catch (err) {
+alert("相机异常");
+stopScanning();
+}
+}
+
+function stopScanning() {
+zxing.reset();
+
+if (currentStream) {
+currentStream.getTracks().forEach(t => t.stop());
+currentStream = null;
+}
+
+document.getElementById('scanUI').style.display = 'none';
+}
+
+</script>
+
 </body>
 </html>
