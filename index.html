@@ -3,85 +3,93 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
-    <title>SuperRapido V5 - 丝滑连扫版</title>
+    <title>SuperRapido V6 - 点选交换版</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <script src="https://unpkg.com/@zxing/library@latest"></script>
     <style>
-        /* 增加最小高度确保缩放时背景不留白 */
-        html, body { min-height: 100vh; background-color: #f1f5f9; overflow-x: auto; }
-        .table-container { background: white; border-radius: 12px; box-shadow: inset 0 2px 4px rgba(0,0,0,0.05); }
+        html, body { min-height: 100vh; background-color: #f1f5f9; }
+        .table-container { background: white; border-radius: 12px; overflow: auto; border: 1px solid #cbd5e1; }
         
-        /* 数量框：醒目蓝色 */
-        .qty-input { border: 2px solid #2563eb !important; background: #eff6ff !important; font-weight: 900; text-align: center; font-size: 1.25rem; }
+        /* 数量框：超大加粗 */
+        .qty-input { border: 3px solid #2563eb !important; background: #eff6ff !important; font-weight: 900; text-align: center; font-size: 1.3rem; border-radius: 8px; }
         
-        /* 列宽调节：看得见的分割线和巨大的感应区 */
-        th { position: relative; border-right: 2px solid #cbd5e1; } /* 明显的深灰色线 */
+        /* 表头单元格 */
+        th { position: relative; border-right: 1px solid #cbd5e1; padding: 12px 8px !important; }
+        
+        /* 极灵敏的列宽调节区 */
         .resizer {
-            position: absolute; right: -10px; top: 0; width: 25px; height: 100%;
+            position: absolute; right: 0; top: 0; width: 30px; height: 100%;
             z-index: 50; cursor: col-resize; touch-action: none;
+            display: flex; align-items: center; justify-content: center;
         }
-        .resizer:active { background: rgba(37, 99, 235, 0.2); border-right: 3px solid #2563eb; }
+        .resizer::after { content: ""; width: 4px; height: 40%; background: #94a3b8; border-radius: 2px; }
+        .resizer:active { background: rgba(37, 99, 235, 0.1); }
+        .resizer:active::after { background: #2563eb; width: 6px; }
 
-        /* 扫描动画 */
+        /* 交换模式高亮 */
+        .swapping { background-color: #fef08a !important; animation: pulse 1s infinite; }
+        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.6; } 100% { opacity: 1; } }
+        
         @keyframes scanMove { 0% { top: 0%; } 100% { top: 100%; } }
-        .scanner-line { position: absolute; width: 100%; h-1; bg-blue-400; shadow-[0_0_15px_#60a5fa]; animation: scanMove 2s linear infinite; }
+        .scanner-line { position: absolute; width: 100%; height: 2px; background: #60a5fa; box-shadow: 0 0 15px #60a5fa; animation: scanMove 2s linear infinite; }
     </style>
 </head>
 <body class="p-2">
-    <div id="app" class="max-w-[2000px] mx-auto flex flex-col h-screen">
+    <div id="app" class="flex flex-col h-screen">
         <div class="flex justify-between items-center mb-3">
-            <h1 class="text-2xl font-black text-blue-900 italic">SuperRapido <span class="text-xs opacity-50 text-red-600 underline">V5 PRO</span></h1>
-            <button onclick="resetSystem()" class="text-[10px] bg-white px-2 py-1 rounded border">清空数据</button>
-        </div>
-
-        <div class="flex gap-2 mb-4 bg-white p-3 rounded-2xl shadow-sm border border-slate-200">
-            <label class="bg-slate-800 text-white p-4 rounded-xl shadow-lg active:scale-95 transition-all">
-                📂 <input type="file" id="fileInput" class="hidden" accept=".xlsx, .xls" />
-            </label>
-            <div class="flex-1 flex gap-1">
-                <input type="text" id="manualInput" placeholder="手动输条码..." class="flex-1 border-2 border-slate-200 rounded-xl px-4 text-lg focus:border-blue-500 outline-none" />
-                <button onclick="startContinuousScan()" class="bg-blue-600 text-white px-6 rounded-xl font-bold shadow-lg active:bg-blue-800">
-                    📷 连扫模式
-                </button>
+            <h1 class="text-2xl font-black text-blue-900 italic">SuperRapido <span class="text-xs font-bold text-blue-500">V6</span></h1>
+            <div class="flex gap-2 text-[10px]">
+                <button onclick="resetSystem()" class="bg-white border px-2 py-1 rounded text-red-500">清空</button>
             </div>
         </div>
 
-        <div class="table-container flex-1 overflow-auto border border-slate-300">
+        <div class="flex gap-2 mb-4 bg-white p-2 rounded-xl shadow-sm">
+            <label class="bg-slate-800 text-white p-4 rounded-xl flex items-center justify-center">
+                📂 <input type="file" id="fileInput" class="hidden" accept=".xlsx, .xls" />
+            </label>
+            <div class="flex-1 flex gap-1">
+                <input type="text" id="manualInput" placeholder="点击输入条码" class="flex-1 border border-slate-300 rounded-xl px-3 outline-none focus:border-blue-500 font-bold" />
+                <button onclick="startContinuousScan()" class="bg-blue-600 text-white px-5 rounded-xl font-bold active:bg-blue-700">📷 扫码</button>
+            </div>
+        </div>
+
+        <div class="table-container flex-1 border border-slate-300 shadow-lg">
             <table id="mainTable" class="border-collapse table-fixed w-max">
-                <thead id="tHead" class="sticky top-0 bg-slate-100 z-30 shadow-sm"></thead>
+                <thead id="tHead" class="sticky top-0 bg-slate-100 z-30"></thead>
                 <tbody id="tBody"></tbody>
             </table>
         </div>
 
-        <div class="flex gap-2 mt-4">
-            <button onclick="exportData()" class="flex-1 bg-emerald-700 text-white py-4 rounded-xl font-black text-lg shadow-xl active:scale-95">
-                导出盘点表 (EXCEL)
-            </button>
-        </div>
+        <button onclick="exportData()" class="mt-3 bg-emerald-700 text-white py-4 rounded-xl font-black text-lg shadow-xl active:scale-95 transition-transform">
+            导出 EXCEL 盘点表
+        </button>
 
         <div id="scannerModal" class="fixed inset-0 bg-black z-[999] hidden flex-col">
-            <div class="p-6 flex justify-between items-center bg-black/60 backdrop-blur-md text-white">
-                <div class="flex flex-col">
-                    <span class="font-bold text-xl">连续扫描模式</span>
-                    <span id="lastScanResult" class="text-sm text-green-400 font-mono">准备就绪...</span>
+            <div class="p-6 flex justify-between items-center bg-black/80 text-white">
+                <div>
+                    <div class="font-bold">连扫模式 (不自动关闭)</div>
+                    <div id="scanFeedback" class="text-xs text-blue-400">准备扫描...</div>
                 </div>
                 <button onclick="stopScan()" class="bg-red-600 px-8 py-3 rounded-full font-black">退出</button>
             </div>
-            <div class="flex-1 relative flex items-center justify-center">
+            <div class="flex-1 relative">
                 <video id="videoFeed" class="absolute inset-0 w-full h-full object-cover"></video>
-                <div class="relative w-80 h-60 border-2 border-white/30 rounded-3xl overflow-hidden bg-white/5">
-                    <div class="scanner-line h-1 bg-blue-500 shadow-[0_0_20px_blue] absolute w-full top-0"></div>
+                <div class="absolute inset-0 flex items-center justify-center">
+                    <div class="w-72 h-48 border-2 border-white/40 rounded-2xl relative overflow-hidden bg-white/5">
+                        <div class="scanner-line"></div>
+                    </div>
                 </div>
-                <div id="successToast" class="absolute bottom-20 bg-green-500 text-white px-6 py-2 rounded-full font-bold opacity-0 transition-opacity">已录入 +1</div>
             </div>
         </div>
     </div>
 
     <script>
-        let db = JSON.parse(localStorage.getItem('SR_V5_DATA')) || [];
-        let cols = JSON.parse(localStorage.getItem('SR_V5_COLS')) || [];
-        let widths = JSON.parse(localStorage.getItem('SR_V5_WIDTHS')) || {};
+        let db = JSON.parse(localStorage.getItem('SR_V6_DATA')) || [];
+        let cols = JSON.parse(localStorage.getItem('SR_V6_COLS')) || [];
+        let widths = JSON.parse(localStorage.getItem('SR_V6_WIDTHS')) || {};
+        let swapIdx = null; // 用于存放第一个选中的列索引
+
         const codeReader = new ZXing.BrowserMultiFormatReader();
 
         function init() {
@@ -94,58 +102,54 @@
             const head = document.getElementById('tHead');
             const body = document.getElementById('tBody');
             
-            // 表头：集成换位按钮和增强版 Resizer
+            // 渲染表头
             head.innerHTML = `<tr>${cols.map((c, i) => `
-                <th class="p-4 bg-slate-50 text-left text-slate-700 font-black text-sm" style="width: ${widths[c] || 160}px">
+                <th class="bg-slate-50 ${swapIdx === i ? 'swapping' : ''}" style="width: ${widths[c] || 150}px">
                     <div class="flex flex-col gap-2">
-                        <span class="truncate">${c}</span>
-                        <div class="flex gap-2">
-                            <button onclick="shift(${i},-1)" class="bg-white border shadow-sm px-2 rounded hover:bg-blue-100 active:scale-90">◀</button>
-                            <button onclick="shift(${i},1)" class="bg-white border shadow-sm px-2 rounded hover:bg-blue-100 active:scale-90">▶</button>
-                        </div>
+                        <span class="truncate text-slate-800 font-black">${c}</span>
+                        <button onclick="prepareSwap(${i})" class="text-[10px] w-fit border border-blue-400 text-blue-600 px-2 py-1 rounded bg-white font-bold active:bg-blue-600 active:text-white">
+                            ↔️ 交换位置
+                        </button>
                     </div>
                     <div class="resizer" ontouchstart="startResizing(event, '${c}')"></div>
                 </th>`).join('')}</tr>`;
 
+            // 渲染内容
             body.innerHTML = db.map((row, rIdx) => `
-                <tr class="even:bg-slate-50 border-b border-slate-200" id="row-${rIdx}">
+                <tr class="even:bg-slate-50/50" id="row-${rIdx}">
                     ${cols.map(c => `
                         <td class="p-1 border-r border-slate-200">
                             <input type="${c==='实际数量'?'number':'text'}" 
                                 value="${row[c]||''}" 
-                                class="w-full h-12 px-2 outline-none bg-transparent ${c==='实际数量'?'qty-input':''}"
+                                class="w-full h-11 px-2 outline-none bg-transparent ${c==='实际数量'?'qty-input':''}"
                                 onchange="edit(${rIdx},'${c}',this.value)"
                                 ${c==='实际数量'?'inputmode="decimal"':''}/>
                         </td>`).join('')}
                 </tr>`).join('');
         }
 
-        // 连扫模式：不关闭相机
-        async function startContinuousScan() {
-            document.getElementById('scannerModal').style.display = 'flex';
-            try {
-                const constraints = { video: { facingMode: "environment", width: { ideal: 1920 }, height: { ideal: 1080 } } };
-                codeReader.decodeFromConstraints(constraints, 'videoFeed', (result) => {
-                    if (result) {
-                        const code = result.getText();
-                        ding();
-                        showToast();
-                        document.getElementById('lastScanResult').innerText = "扫码成功: " + code;
-                        processCode(code, false); // false 表示不自动关闭相机
-                    }
-                });
-            } catch (e) { alert("相机权限错误"); stopScan(); }
+        // 核心：交换位置逻辑
+        function prepareSwap(idx) {
+            if (swapIdx === null) {
+                swapIdx = idx; // 选中第一列
+                render();
+            } else {
+                // 选中第二列，开始对调
+                const temp = cols[swapIdx];
+                cols[swapIdx] = cols[idx];
+                cols[idx] = temp;
+                swapIdx = null; // 重置
+                save(); render();
+            }
         }
 
-        function stopScan() { codeReader.reset(); document.getElementById('scannerModal').style.display = 'none'; }
-
-        // 核心：列宽拖拽调节
+        // 核心：列宽拖动
         function startResizing(e, colName) {
             const startX = e.touches[0].pageX;
-            const startW = widths[colName] || 160;
+            const startW = widths[colName] || 150;
             const onMove = (ev) => {
                 const currentX = ev.touches[0].pageX;
-                widths[colName] = Math.max(60, startW + (currentX - startX));
+                widths[colName] = Math.max(70, startW + (currentX - startX));
                 render();
             };
             const onEnd = () => {
@@ -157,20 +161,30 @@
             document.addEventListener('touchend', onEnd, { once: true });
         }
 
-        function processCode(code, shouldClose = true) {
+        // 连续扫码逻辑
+        async function startContinuousScan() {
+            document.getElementById('scannerModal').style.display = 'flex';
+            try {
+                codeReader.decodeFromConstraints({ video: { facingMode: "environment", width: { ideal: 1920 } } }, 'videoFeed', (result) => {
+                    if (result) {
+                        ding();
+                        document.getElementById('scanFeedback').innerText = "扫码成功: " + result.getText();
+                        processCode(result.getText(), false);
+                    }
+                });
+            } catch (e) { alert("相机启动失败"); stopScan(); }
+        }
+
+        function stopScan() { codeReader.reset(); document.getElementById('scannerModal').style.display = 'none'; }
+
+        function processCode(code, scroll = true) {
             const barKey = cols.find(c => c.includes('条') || c.includes('码') || c.includes('COD')) || cols[0];
             const idx = db.findIndex(r => String(r[barKey]).trim() === String(code).trim());
-            
             if (idx !== -1) {
                 db[idx]['实际数量'] = (parseFloat(db[idx]['实际数量']) || 0) + 1;
                 save(); render();
-                if (shouldClose) {
-                    document.getElementById(`row-${idx}`).scrollIntoView({ behavior: 'smooth', block: 'center' });
-                }
-            } else {
-                if(shouldClose) alert("未找到条码: " + code);
+                if (scroll) document.getElementById(`row-${idx}`).scrollIntoView({ behavior: 'smooth', block: 'center' });
             }
-            document.getElementById('manualInput').value = '';
         }
 
         function ding() {
@@ -178,40 +192,24 @@
             const osc = ctx.createOscillator();
             const g = ctx.createGain();
             osc.connect(g); g.connect(ctx.destination);
-            osc.frequency.setValueAtTime(1200, ctx.currentTime);
-            g.gain.setValueAtTime(0, ctx.currentTime);
+            osc.frequency.value = 1000;
             g.gain.linearRampToValueAtTime(0.2, ctx.currentTime + 0.05);
             g.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.2);
             osc.start(); osc.stop(ctx.currentTime + 0.2);
             if (navigator.vibrate) navigator.vibrate(80);
         }
 
-        function showToast() {
-            const t = document.getElementById('successToast');
-            t.style.opacity = "1";
-            setTimeout(() => t.style.opacity = "0", 800);
-        }
-
-        function shift(idx, dir) {
-            const target = idx + dir;
-            if (target >= 0 && target < cols.length) {
-                [cols[idx], cols[target]] = [cols[target], cols[idx]];
-                save(); render();
-            }
-        }
-
         function edit(idx, col, val) { db[idx][col] = val; save(); }
         function save() { 
-            localStorage.setItem('SR_V5_DATA', JSON.stringify(db)); 
-            localStorage.setItem('SR_V5_COLS', JSON.stringify(cols)); 
-            localStorage.setItem('SR_V5_WIDTHS', JSON.stringify(widths));
+            localStorage.setItem('SR_V6_DATA', JSON.stringify(db)); 
+            localStorage.setItem('SR_V6_COLS', JSON.stringify(cols)); 
+            localStorage.setItem('SR_V6_WIDTHS', JSON.stringify(widths));
         }
 
         function loadExcel(e) {
             const reader = new FileReader();
             reader.onload = (ev) => {
-                const wb = XLSX.read(ev.target.result, { type: 'binary' });
-                const data = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { defval: "" });
+                const data = XLSX.utils.sheet_to_json(XLSX.read(ev.target.result, { type: 'binary' }).Sheets[XLSX.read(ev.target.result, { type: 'binary' }).SheetNames[0]], { defval: "" });
                 cols = Object.keys(data[0]);
                 if (!cols.includes('实际数量')) cols.unshift('实际数量');
                 db = data; save(); render();
@@ -223,11 +221,10 @@
             const ws = XLSX.utils.json_to_sheet(db, { header: cols });
             const wb = XLSX.utils.book_new();
             XLSX.utils.book_append_sheet(wb, ws, "Inventory");
-            XLSX.writeFile(wb, `Stock_V5.xlsx`);
+            XLSX.writeFile(wb, `Stock_V6.xlsx`);
         }
 
-        function resetSystem() { if(confirm("确定重置？所有数据将消失！")) { localStorage.clear(); location.reload(); } }
-        
+        function resetSystem() { if(confirm("重置系统？数据将消失！")) { localStorage.clear(); location.reload(); } }
         init();
     </script>
 </body>
