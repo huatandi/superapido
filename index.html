@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes, viewport-fit=cover">
-    <title>飞速盘点 S1.3 - 极速库存管理</title>
+    <title>飞速盘点 S1.4 - 极速库存管理</title>
     <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
     <script src="https://unpkg.com/@zxing/library@0.19.1"></script>
     <script src="https://cdn.tailwindcss.com"></script>
@@ -73,7 +73,7 @@
         .qty-input { 
             width: 100%; 
             height: 55px; 
-            border: 2px solid #3b82f6 !important; 
+            border: 3px solid #3b82f6 !important; 
             text-align: center; 
             font-size: 1.5rem; 
             font-weight: 900; 
@@ -91,6 +91,7 @@
         .row-focus { 
             background: linear-gradient(90deg, #fef08a 0%, #fde047 100%) !important;
             animation: highlight 0.3s ease;
+            box-shadow: 0 0 0 3px #ef4444 inset;
         }
         @keyframes highlight {
             0% { background: #fff; }
@@ -140,20 +141,20 @@
             transform: translate(-50%, -50%); 
             width: 80%; 
             height: 220px; 
-            border: 2px solid #3b82f6; 
-            border-radius: 16px; 
-            box-shadow: 0 0 0 2000px rgba(0,0,0,0.7); 
+            border: 3px solid #3b82f6; 
+            border-radius: 20px; 
+            box-shadow: 0 0 0 2000px rgba(0,0,0,0.75); 
             z-index: 10; 
             pointer-events: none; 
         }
         .scan-line { 
             position: absolute; 
             width: 100%; 
-            height: 2px; 
+            height: 3px; 
             background: linear-gradient(90deg, transparent, #3b82f6, #60a5fa, #3b82f6, transparent);
             top: 0; 
             animation: scanLineMove 1.5s infinite ease-in-out; 
-            box-shadow: 0 0 15px #3b82f6;
+            box-shadow: 0 0 20px #3b82f6;
         }
         @keyframes scanLineMove { 
             0%, 100% { top: 5%; }
@@ -205,6 +206,23 @@
             overflow: hidden;
             text-overflow: ellipsis;
         }
+        /* 扫描界面关闭按钮明显样式 */
+        .close-scan-btn {
+            background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+            box-shadow: 0 4px 15px rgba(239, 68, 68, 0.5);
+            font-size: 18px;
+            font-weight: 900;
+            padding: 12px 24px;
+            border-radius: 50px;
+            border: 2px solid white;
+        }
+        .close-scan-btn:active {
+            transform: scale(0.95);
+        }
+        .scan-header {
+            background: linear-gradient(135deg, #000000 0%, #1a1a1a 100%);
+            border-bottom: 3px solid #3b82f6;
+        }
         @media (max-width: 480px) {
             .action-btn {
                 font-size: 10px;
@@ -213,6 +231,10 @@
             .qty-input { height: 48px; font-size: 1.2rem; }
             .main-card { border-radius: 16px; }
             body { padding: 6px; }
+            .close-scan-btn {
+                font-size: 14px;
+                padding: 8px 20px;
+            }
         }
     </style>
 </head>
@@ -237,7 +259,7 @@
             <div class="flex items-center justify-between">
                 <div>
                     <h1 class="text-2xl font-black tracking-tight">🚀 飞速盘点</h1>
-                    <div class="version-badge inline-block mt-0.5">S1.3</div>
+                    <div class="version-badge inline-block mt-0.5">S1.4</div>
                 </div>
                 <div class="text-right text-xs opacity-90">
                     极速扫码
@@ -257,7 +279,7 @@
                 </div>
             </div>
             
-            <!-- 按钮组：确认 + 列管理 + 重置 + 导入 2行2列布局 -->
+            <!-- 按钮组：确认 + 列管理 + 重置 + 导入 -->
             <div class="btn-group mb-3">
                 <button id="confirmBtn" class="action-btn bg-blue-600 text-white shadow-md">
                     ✅ 确认
@@ -288,26 +310,29 @@
         </div>
     </div>
 
+    <!-- 扫描界面 - 关闭按钮非常明显 -->
     <div id="scanUI" class="fixed inset-0 bg-black z-[999] hidden flex-col">
-        <div class="p-3 flex justify-between items-center bg-gradient-to-r from-gray-900 to-black text-white">
-            <span class="font-bold text-blue-400 text-sm">🔍 扫描模式 - 对准条码</span>
-            <button onclick="stopScanning()" class="bg-red-600 px-6 py-2 rounded-full font-bold text-sm active:scale-95 transition">关闭</button>
+        <div class="scan-header p-4 flex justify-between items-center">
+            <span class="font-bold text-blue-400 text-lg">🔍 条码扫描模式</span>
+            <button onclick="stopScanning()" class="close-scan-btn text-white font-bold">
+                ✕ 关闭扫描
+            </button>
         </div>
         <div class="relative flex-1 bg-black">
             <video id="video" class="w-full h-full object-cover" playsinline muted autoplay></video>
             <div class="scan-frame">
                 <div class="scan-line"></div>
             </div>
-            <div class="absolute bottom-5 left-0 right-0 text-center">
-                <div class="bg-black/60 backdrop-blur text-white px-3 py-1 rounded-full inline-block text-xs font-bold">
-                    📷 将条码对准扫描框
+            <div class="absolute bottom-8 left-0 right-0 text-center">
+                <div class="bg-black/70 backdrop-blur text-white px-4 py-2 rounded-full inline-block text-sm font-bold border-2 border-blue-500">
+                    📷 将条码对准扫描框中心
                 </div>
             </div>
         </div>
     </div>
 
     <script>
-        const VERSION = "S1.3";
+        const VERSION = "S1.4";
         const STORAGE_KEY = "FEISUPANDIAN_" + VERSION;
         
         let db = [];
@@ -317,6 +342,7 @@
         let reader = null;
         let lastCode = "";
         let lastTime = 0;
+        let autoCloseScan = true; // 扫码成功后自动关闭扫描界面
 
         // 加载数据
         function loadData() {
@@ -394,8 +420,56 @@
             }
         }
 
-        // 增强的条码/编码识别（支持多种匹配方式）
-        function handleBarcode(code, fromCamera = false) {
+        // 滚动到指定行并聚焦数量输入框
+        function scrollToRowAndFocus(foundIndex) {
+            return new Promise((resolve) => {
+                // 重新渲染表格
+                render();
+                
+                // 等待DOM更新完成
+                setTimeout(() => {
+                    const rowEl = document.getElementById(`row-${foundIndex}`);
+                    if (rowEl) {
+                        // 移除所有高亮
+                        document.querySelectorAll('#mainTable tbody tr').forEach(tr => {
+                            tr.classList.remove('row-focus');
+                        });
+                        
+                        // 添加高亮
+                        rowEl.classList.add('row-focus');
+                        
+                        // 平滑滚动到该行
+                        rowEl.scrollIntoView({ 
+                            behavior: 'smooth', 
+                            block: 'center',
+                            inline: 'center'
+                        });
+                        
+                        // 找到数量输入框并聚焦
+                        const qtyInput = document.getElementById(`qty-${foundIndex}`);
+                        if (qtyInput) {
+                            setTimeout(() => {
+                                qtyInput.focus();
+                                qtyInput.select();
+                                // 添加额外的高亮效果
+                                qtyInput.style.transform = 'scale(1.02)';
+                                setTimeout(() => {
+                                    qtyInput.style.transform = '';
+                                }, 300);
+                                resolve(true);
+                            }, 300);
+                        } else {
+                            resolve(true);
+                        }
+                    } else {
+                        resolve(false);
+                    }
+                }, 100);
+            });
+        }
+
+        // 增强的条码/编码识别
+        async function handleBarcode(code, fromCamera = false) {
             if (!code) return false;
             
             const now = Date.now();
@@ -444,24 +518,15 @@
                 vibrate();
                 showToast(`✅ 找到商品: ${db[foundIndex]['商品名称'] || db[foundIndex]['名称'] || codeStr}`, false);
                 
-                // 重新渲染并高亮
-                render();
-                setTimeout(() => {
-                    const rowEl = document.getElementById(`row-${foundIndex}`);
-                    if (rowEl) {
-                        document.querySelectorAll('tr').forEach(tr => tr.classList.remove('row-focus'));
-                        rowEl.classList.add('row-focus');
-                        rowEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                        
-                        const qtyInput = document.getElementById(`qty-${foundIndex}`);
-                        if (qtyInput) {
-                            setTimeout(() => {
-                                qtyInput.focus();
-                                qtyInput.select();
-                            }, 300);
-                        }
-                    }
-                }, 50);
+                // 跳转到该行并聚焦数量单元格
+                await scrollToRowAndFocus(foundIndex);
+                
+                // 如果是从相机扫描且自动关闭功能开启，则关闭扫描界面
+                if (fromCamera && autoCloseScan) {
+                    setTimeout(() => {
+                        stopScanning();
+                    }, 500);
+                }
                 
                 return true;
             } else {
@@ -562,7 +627,8 @@
                 videoEl.srcObject = null;
             }
             
-            document.getElementById('scanUI').style.display = 'none';
+            const scanUI = document.getElementById('scanUI');
+            scanUI.style.display = 'none';
         }
 
         // 渲染表格
@@ -571,7 +637,7 @@
             const tbody = document.getElementById('tBody');
             
             if (!columns.length) {
-                tbody.innerHTML = '<tr><td colspan="10" class="text-center p-6 text-gray-500">暂无数据，请导入Excel或添加列表</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="10" class="text-center p-6 text-gray-500">暂无数据，请导入Excel或添加列表</tr></tr>';
                 return;
             }
             
@@ -594,7 +660,8 @@
                                     class="qty-input" 
                                     onchange="updateQty(${idx}, this.value)"
                                     onfocus="this.select()"
-                                    placeholder="0" />` :
+                                    placeholder="0"
+                                    inputmode="numeric" />` :
                                 `<input type="text" value="${escapeHtml(String(row[col] || ''))}" 
                                     class="w-full p-2 text-xs outline-none bg-transparent"
                                     onchange="updateCell(${idx}, '${col}', this.value)" />`
@@ -887,7 +954,7 @@
             }
         };
         
-        console.log(`🚀 飞速盘点 ${VERSION} 已启动 - 支持双指缩放表格 | 增强编码识别`);
+        console.log(`🚀 飞速盘点 ${VERSION} 已启动 - 扫码自动跳转聚焦 | 明显关闭按钮`);
     </script>
 </body>
 </html>
