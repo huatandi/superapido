@@ -3,209 +3,190 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>V50 PRO FINAL</title>
+<title>V50 STABLE</title>
 
 <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
 <script src="https://unpkg.com/@zxing/library@0.19.1"></script>
-<script src="https://cdn.tailwindcss.com"></script>
 
 <style>
-body{background:#f1f5f9;font-family:sans-serif}
-.table-container{background:#fff;height:55vh;overflow:auto;border:2px solid #000;border-radius:10px}
-th{position:sticky;top:0;background:#111;color:#fff;padding:10px}
-td{border:1px solid #ddd}
-.qty-input{height:60px;font-size:2rem;text-align:center;border:3px solid #2563eb}
+body{font-family:sans-serif;background:#f1f5f9;padding:10px}
+table{border-collapse:collapse;width:100%}
+th{background:#111;color:#fff;padding:8px}
+td{border:1px solid #ccc}
+input{width:100%;padding:6px;border:none}
+.qty{font-size:20px;text-align:center;border:2px solid #2563eb}
 .row-focus{background:#fef08a}
+#video{width:100%;display:none}
 </style>
 </head>
 
-<body class="p-2">
+<body>
 
-<div class="flex gap-2 mb-2">
-<button onclick="startScanning()" class="bg-blue-600 text-white px-4 py-2">扫码</button>
-<input id="manualInput" class="border p-2 flex-1" placeholder="输入条码"/>
-<button onclick="handleManual()" class="bg-black text-white px-4">确认</button>
-</div>
+<h2>扫码盘点（稳定版）</h2>
 
-<input type="file" id="fileInput" class="mb-2"/>
+<button onclick="startScan()">📷 扫码</button>
+<input id="manual" placeholder="手动输入条码">
+<button onclick="manual()">确认</button>
 
-<div class="table-container">
-<table id="mainTable">
-<thead id="tHead"></thead>
-<tbody id="tBody"></tbody>
+<br><br>
+
+<input type="file" id="file">
+
+<table>
+<thead id="head"></thead>
+<tbody id="body"></tbody>
 </table>
-</div>
 
-<button onclick="exportExcel()" class="mt-3 bg-green-700 text-white p-3 w-full">导出Excel</button>
+<br>
+<button onclick="exportExcel()">导出Excel</button>
 
-<!-- 列管理 -->
-<div id="colModal" style="display:none;position:fixed;inset:0;background:#0008;">
-<div style="background:#fff;margin:50px;padding:20px">
-<div id="colList"></div>
-<input id="newColName" placeholder="新列"/>
-<button onclick="addColumn()">添加</button>
-<button onclick="closeColModal()">关闭</button>
-</div>
-</div>
-
-<!-- 扫码 -->
-<video id="v" style="display:none;width:100%"></video>
+<video id="video" playsinline></video>
 
 <script>
 
-const VER="FINAL_V1";
-let db=[],columns=[];
-
-try{
-db=JSON.parse(localStorage.getItem(VER+"_DATA"))||[];
-columns=JSON.parse(localStorage.getItem(VER+"_COLS"))||[];
-}catch(e){}
+let db=[],cols=[];
 
 const normalize=v=>String(v).replace(/\s/g,'').toLowerCase();
 
-const hints=new Map();
-hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS,[
-ZXing.BarcodeFormat.CODE_128,
-ZXing.BarcodeFormat.EAN_13,
-ZXing.BarcodeFormat.EAN_8,
-ZXing.BarcodeFormat.UPC_A
-]);
-hints.set(ZXing.DecodeHintType.TRY_HARDER,true);
+/* ===== Excel 导入（稳定版） ===== */
+document.getElementById("file").onchange=function(e){
+const file=e.target.files[0];
+if(!file)return;
 
-const zxing=new ZXing.BrowserMultiFormatReader(hints);
-zxing.timeBetweenDecodingAttempts=0;
+const reader=new FileReader();
 
-let lastCode="",lastTime=0;
+reader.onload=function(ev){
+try{
+const data=new Uint8Array(ev.target.result);
+const wb=XLSX.read(data,{type:'array'});
+const sheet=wb.Sheets[wb.SheetNames[0]];
+const json=XLSX.utils.sheet_to_json(sheet,{defval:""});
 
-async function startScanning(){
-document.getElementById('v').style.display='block';
-
-await zxing.decodeFromConstraints({
-video:{facingMode:"environment",width:{ideal:640},height:{ideal:480}}
-},"v",(res)=>{
-if(res){
-const code=res.getText();
-const now=Date.now();
-if(code===lastCode && now-lastTime<800)return;
-lastCode=code;lastTime=now;
-handleBarcode(code,true);
-}
-});
-
-// 自动对焦增强
-setInterval(()=>{
-let track=document.getElementById('v').srcObject?.getVideoTracks()[0];
-if(track?.getCapabilities){
-let cap=track.getCapabilities();
-if(cap.focusMode?.includes('continuous')){
-track.applyConstraints({advanced:[{focusMode:'continuous'}]}).catch(()=>{});
-}
-}
-},800);
+if(!json.length){
+alert("空文件");return;
 }
 
-function handleBarcode(code){
-const target=normalize(code);
+cols=Object.keys(json[0]);
 
-let idx=db.findIndex(r=>Object.values(r).some(v=>normalize(v)===target));
-
-if(idx!==-1){
-
-// 自动+1
-if(db[idx]["实际数量"]!==undefined){
-db[idx]["实际数量"]=Number(db[idx]["实际数量"]||0)+1;
-}
-
-render();
-save();
-
-}else{
-if(navigator.vibrate)navigator.vibrate(100);
-alert("未找到:"+code);
-}
-}
-
-function handleManual(){
-handleBarcode(document.getElementById('manualInput').value);
-document.getElementById('manualInput').value="";
-}
-
-document.getElementById('fileInput').addEventListener('change',async(e)=>{
-let file=e.target.files[0];
-let data=await file.arrayBuffer();
-let wb=XLSX.read(data);
-let json=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{defval:""});
-
-columns=Object.keys(json[0]);
-if(!columns.includes("实际数量")){
-columns.unshift("实际数量");
+if(!cols.includes("实际数量")){
+cols.unshift("实际数量");
 json.forEach(r=>r["实际数量"]="");
 }
 
 db=json;
 save();
 render();
-});
 
+}catch(e){
+alert("文件错误");
+}
+};
+
+reader.readAsArrayBuffer(file);
+};
+
+/* ===== 渲染 ===== */
 function render(){
-tHead.innerHTML="<tr>"+columns.map(c=>"<th>"+c+"</th>").join("")+"</tr>";
-tBody.innerHTML=db.map((r,i)=>"<tr>"+
-columns.map(c=>`<td><input value="${r[c]||""}" onchange="edit(${i},'${c}',this.value)" class="${c=='实际数量'?'qty-input':''}"></td>`).join("")
-+"</tr>").join("");
+head.innerHTML="<tr>"+cols.map(c=>"<th>"+c+"</th>").join("")+"</tr>";
+
+body.innerHTML=db.map((r,i)=>`
+<tr id="r${i}">
+${cols.map(c=>`
+<td>
+<input value="${r[c]||""}"
+class="${c=="实际数量"?"qty":""}"
+onchange="edit(${i},'${c}',this.value)">
+</td>`).join("")}
+</tr>
+`).join("");
 }
 
-function edit(i,c,v){db[i][c]=v;save();}
-
-function save(){
-localStorage.setItem(VER+"_DATA",JSON.stringify(db));
-localStorage.setItem(VER+"_COLS",JSON.stringify(columns));
+/* ===== 修改 ===== */
+function edit(i,c,v){
+db[i][c]=v;
+save();
 }
 
+/* ===== 扫码 ===== */
+const hints=new Map();
+hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS,[
+ZXing.BarcodeFormat.CODE_128,
+ZXing.BarcodeFormat.EAN_13,
+ZXing.BarcodeFormat.UPC_A
+]);
+
+const readerZX=new ZXing.BrowserMultiFormatReader(hints);
+readerZX.timeBetweenDecodingAttempts=0;
+
+let last="",time=0;
+
+function startScan(){
+video.style.display="block";
+
+readerZX.decodeFromConstraints({
+video:{facingMode:"environment",width:{ideal:640},height:{ideal:480}}
+},"video",(res)=>{
+if(res){
+let code=res.getText();
+let now=Date.now();
+
+if(code===last && now-time<800)return;
+last=code;time=now;
+
+handle(code);
+}
+});
+}
+
+/* ===== 处理条码 ===== */
+function handle(code){
+const t=normalize(code);
+
+let idx=db.findIndex(r=>
+Object.values(r).some(v=>normalize(v)==t)
+);
+
+if(idx!=-1){
+
+document.querySelectorAll("tr").forEach(tr=>tr.classList.remove("row-focus"));
+
+let row=document.getElementById("r"+idx);
+if(row){
+row.classList.add("row-focus");
+row.scrollIntoView({block:"center"});
+}
+
+}else{
+navigator.vibrate&&navigator.vibrate(100);
+}
+}
+
+/* ===== 手动 ===== */
+function manual(){
+handle(document.getElementById("manual").value);
+document.getElementById("manual").value="";
+}
+
+/* ===== 导出 ===== */
 function exportExcel(){
-let ws=XLSX.utils.json_to_sheet(db,{header:columns});
+let ws=XLSX.utils.json_to_sheet(db,{header:cols});
 let wb=XLSX.utils.book_new();
 XLSX.utils.book_append_sheet(wb,ws,"data");
 XLSX.writeFile(wb,"库存.xlsx");
 }
 
-/* 列管理 */
-function openColModal(){colModal.style.display="block";renderColList();}
-function closeColModal(){colModal.style.display="none";render();}
-
-function renderColList(){
-colList.innerHTML=columns.map((c,i)=>`
-<div>
-${c}
-<button onclick="moveCol(${i},-1)">⬆️</button>
-<button onclick="moveCol(${i},1)">⬇️</button>
-<button onclick="deleteCol('${c}')">删</button>
-</div>`).join("");
+/* ===== 存储 ===== */
+function save(){
+localStorage.setItem("db",JSON.stringify(db));
+localStorage.setItem("cols",JSON.stringify(cols));
 }
 
-function moveCol(i,d){
-let t=i+d;
-if(t<0||t>=columns.length)return;
-[columns[i],columns[t]]=[columns[t],columns[i]];
-save();
-renderColList();
-render();
-}
+try{
+db=JSON.parse(localStorage.getItem("db"))||[];
+cols=JSON.parse(localStorage.getItem("cols"))||[];
+}catch(e){}
 
-function deleteCol(c){
-columns=columns.filter(x=>x!==c);
-save();renderColList();render();
-}
-
-function addColumn(){
-let n=newColName.value.trim();
-if(n&&!columns.includes(n)){
-columns.push(n);
-db.forEach(r=>r[n]="");
-save();renderColList();render();
-}
-}
-
-if(columns.length)render();
+if(cols.length)render();
 
 </script>
 
