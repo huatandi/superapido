@@ -16,7 +16,8 @@
         td { border-right: 1px solid #e2e8f0; border-bottom: 1px solid #e2e8f0; padding: 2px; }
         .qty-input { width: 100%; height: 65px; border: 4px solid #2563eb !important; text-align: center; font-size: 2.2rem; font-weight: 900; color: #1e40af; border-radius: 8px; background: #fff; -webkit-appearance: none; }
         .row-focus { background-color: #fef08a !important; outline: 6px solid #ef4444; outline-offset: -6px; }
-        #toast { position: fixed; top: 15%; left: 50%; transform: translateX(-50%); color: white; padding: 20px; border-radius: 20px; z-index: 10000; display: none; font-weight: 900; text-align: center; width: 80%; box-shadow: 0 10px 40px rgba(0,0,0,0.6); }
+        /* 修复死机的关键：非阻塞式提示框 */
+        #customToast { position: fixed; top: 20%; left: 50%; transform: translateX(-50%); background: rgba(239, 68, 68, 0.9); color: white; padding: 15px 30px; border-radius: 50px; z-index: 10000; display: none; font-weight: 900; box-shadow: 0 10px 30px rgba(0,0,0,0.3); pointer-events: none; }
         #colModal { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.85); z-index:9999; align-items:center; justify-content:center; }
         .scan-frame { position: absolute; top: 45%; left: 50%; transform: translate(-50%, -50%); width: 85%; height: 220px; border: 3px solid #3b82f6; border-radius: 20px; box-shadow: 0 0 0 2000px rgba(0,0,0,0.6); z-index: 10; pointer-events: none; }
         .scan-line { position: absolute; width: 100%; height: 3px; background: #3b82f6; top: 0; animation: scanLineMove 1.5s infinite cubic-bezier(0.4, 0, 0.2, 1); box-shadow: 0 0 15px #3b82f6; will-change: top; }
@@ -25,7 +26,7 @@
     </style>
 </head>
 <body class="p-2">
-    <div id="toast"></div>
+    <div id="customToast">⚠️ 条码不存在</div>
 
     <div id="colModal">
         <div class="bg-white w-11/12 max-h-[85vh] rounded-3xl p-6 overflow-auto border-4 border-slate-900 shadow-2xl">
@@ -33,9 +34,9 @@
             <div id="colList" class="space-y-2 mb-6"></div>
             <div class="flex gap-2 p-3 bg-slate-100 rounded-2xl border-2">
                 <input type="text" id="newColName" placeholder="新列名..." class="flex-1 bg-transparent font-bold outline-none text-lg" />
-                <button onclick="addColumn()" class="bg-blue-600 text-white px-6 py-2 rounded-xl font-bold active:scale-95">添加</button>
+                <button onclick="addColumn()" class="bg-blue-600 text-white px-6 py-2 rounded-xl font-bold">添加</button>
             </div>
-            <button onclick="closeColModal()" class="w-full mt-6 bg-slate-900 text-white py-5 rounded-2xl font-black text-xl active:scale-95">完成返回</button>
+            <button onclick="closeColModal()" class="w-full mt-6 bg-slate-900 text-white py-5 rounded-2xl font-black text-xl">完成返回</button>
         </div>
     </div>
 
@@ -66,7 +67,7 @@
             <table id="mainTable"><thead id="tHead"></thead><tbody id="tBody"></tbody></table>
         </div>
         
-        <button onclick="exportExcel()" class="mt-4 bg-emerald-700 text-white py-5 rounded-2xl font-black text-2xl shadow-xl active:scale-95 border-b-8 border-emerald-900">💾 导出保存 Excel</button>
+        <button onclick="exportExcel()" class="mt-4 bg-emerald-700 text-white py-5 rounded-2xl font-black text-2xl shadow-xl border-b-8 border-emerald-900">💾 导出保存 Excel</button>
     </div>
 
     <div id="scanUI" class="fixed inset-0 bg-black z-[999] hidden flex-col">
@@ -101,6 +102,13 @@
             handleBarcode(document.getElementById('manualInput').value);
         };
 
+        function showToast(msg) {
+            const t = document.getElementById('customToast');
+            t.innerText = msg;
+            t.style.display = 'block';
+            setTimeout(() => { t.style.display = 'none'; }, 2000);
+        }
+
         function playSound(isSuccess) {
             try {
                 const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -116,14 +124,8 @@
             document.getElementById('scanUI').style.display = 'flex';
             try {
                 const constraints = {
-                    video: { 
-                        facingMode: "environment", 
-                        width: { ideal: 1280 }, 
-                        height: { ideal: 720 },
-                        frameRate: { ideal: 60, min: 30 }
-                    }
+                    video: { facingMode: "environment", width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 60, min: 30 } }
                 };
-                
                 zxing.decodeFromConstraints(constraints, 'v', (res, err) => {
                     if (res) {
                         const code = res.getText();
@@ -133,21 +135,7 @@
                         handleBarcode(code, true);
                     }
                 });
-
-                const videoEl = document.getElementById('v');
-                setTimeout(() => {
-                    const track = videoEl.srcObject?.getVideoTracks()[0];
-                    if (track && track.getCapabilities) {
-                        const cap = track.getCapabilities();
-                        setInterval(() => {
-                            if (cap.focusMode?.includes('continuous')) {
-                                track.applyConstraints({advanced: [{focusMode: 'continuous'}]}).catch(()=>{});
-                            }
-                        }, 1200);
-                    }
-                }, 1000);
-
-            } catch (err) { alert("相机启动失败，请检查权限"); stopScanning(); }
+            } catch (err) { alert("相机启动失败"); stopScanning(); }
         }
 
         function stopScanning() { zxing.reset(); document.getElementById('scanUI').style.display = 'none'; }
@@ -171,7 +159,8 @@
                 if(fromCam) stopScanning();
             } else {
                 playSound(false); 
-                alert("⚠️ 未找到: " + target);
+                // 修复核心：使用 showToast 代替阻塞的 alert，避免摄像头死机
+                showToast("⚠️ 未找到条码: " + target);
             }
         }
 
@@ -213,51 +202,23 @@
 
         function openColModal() { document.getElementById('colModal').style.display = 'flex'; renderColList(); }
         function closeColModal() { document.getElementById('colModal').style.display = 'none'; render(); }
-
-        // --- 核心优化部分：完善列管理 ---
         function renderColList() {
             document.getElementById('colList').innerHTML = columns.map((c, i) => `
-                <div class="flex items-center justify-between bg-slate-50 p-3 rounded-xl border-2 border-slate-200">
-                    <span class="font-bold text-slate-700 truncate mr-2 flex-1">${c}</span>
-                    <div class="flex gap-1 shrink-0">
-                        <button onclick="moveCol(${i},-1)" class="w-10 h-10 flex items-center justify-center bg-white border rounded shadow-sm active:bg-slate-100 ${i===0?'opacity-20 pointer-events-none':''}">⬆️</button>
-                        <button onclick="moveCol(${i},1)" class="w-10 h-10 flex items-center justify-center bg-white border rounded shadow-sm active:bg-slate-100 ${i===columns.length-1?'opacity-20 pointer-events-none':''}">⬇️</button>
-                        <button onclick="deleteCol('${c}')" class="w-10 h-10 flex items-center justify-center bg-red-50 text-red-600 rounded border border-red-100 active:bg-red-100">🗑️</button>
+                <div class="flex items-center justify-between bg-slate-50 p-4 rounded-xl border">
+                    <span class="font-bold text-lg text-slate-700">${c}</span>
+                    <div class="flex gap-2">
+                        <button onclick="moveCol(${i},-1)" class="p-3 border rounded">⬆️</button>
+                        <button onclick="moveCol(${i},1)" class="p-3 border rounded">⬇️</button>
+                        <button onclick="deleteCol('${c}')" class="p-3 text-red-600 font-bold">删除</button>
                     </div>
                 </div>`).join('');
         }
-
-        function moveCol(i, d) { 
-            let t = i + d; 
-            if (t >= 0 && t < columns.length) { 
-                [columns[i], columns[t]] = [columns[t], columns[i]]; 
-                renderColList(); 
-                push(); 
-            } 
-        }
-
+        function moveCol(i, d) { let t = i + d; if (t>=0 && t<columns.length) { [columns[i], columns[t]] = [columns[t], columns[i]]; renderColList(); push(); } }
         function addColumn() {
-            const input = document.getElementById('newColName');
-            const n = input.value.trim();
-            if (n && !columns.includes(n)) { 
-                columns.push(n); 
-                db.forEach(r => r[n] = ""); 
-                input.value = ""; 
-                renderColList(); 
-                push(); 
-            } else if (columns.includes(n)) {
-                alert("列名已存在！");
-            }
+            const n = document.getElementById('newColName').value.trim();
+            if (n && !columns.includes(n)) { columns.push(n); db.forEach(r => r[n] = ""); push(); renderColList(); }
         }
-
-        function deleteCol(n) { 
-            if(confirm(`确定删除 [${n}] 吗？`)) { 
-                columns = columns.filter(c => c !== n); 
-                renderColList(); 
-                push(); 
-            } 
-        }
-        // --- 优化结束 ---
+        function deleteCol(n) { if(confirm("确定删除该列？")) { columns = columns.filter(c => c !== n); push(); renderColList(); } }
 
         function initResize(e, c) {
             const sX = e.touches[0].pageX; const sW = widths[c] || 130;
