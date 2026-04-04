@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
-    <title>SuperRapido V50.1 iPad Fix</title>
+    <title>SuperRapido V50 Pro</title>
     <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
     <script src="https://unpkg.com/@zxing/library@0.19.1"></script>
     <script src="https://cdn.tailwindcss.com"></script>
@@ -19,8 +19,9 @@
         #toast { position: fixed; top: 15%; left: 50%; transform: translateX(-50%); color: white; padding: 20px; border-radius: 20px; z-index: 10000; display: none; font-weight: 900; text-align: center; width: 80%; box-shadow: 0 10px 40px rgba(0,0,0,0.6); }
         #colModal { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.85); z-index:9999; align-items:center; justify-content:center; }
         .scan-frame { position: absolute; top: 45%; left: 50%; transform: translate(-50%, -50%); width: 85%; height: 220px; border: 3px solid #3b82f6; border-radius: 20px; box-shadow: 0 0 0 2000px rgba(0,0,0,0.6); z-index: 10; pointer-events: none; }
-        .scan-line { position: absolute; width: 100%; height: 3px; background: #3b82f6; top: 0; animation: scanLineMove 1.2s infinite linear; box-shadow: 0 0 15px #3b82f6; }
-        @keyframes scanLineMove { 0% { top: 5%; } 100% { top: 95%; } }
+        /* 优化安卓扫描线动画，增加硬件加速 */
+        .scan-line { position: absolute; width: 100%; height: 3px; background: #3b82f6; top: 0; animation: scanLineMove 1.5s infinite cubic-bezier(0.4, 0, 0.2, 1); box-shadow: 0 0 15px #3b82f6; will-change: top; }
+        @keyframes scanLineMove { 0% { top: 5%; } 50% { top: 95%; } 100% { top: 5%; } }
         .giant-cam-btn { width: 100px !important; height: 100px !important; font-size: 50px !important; flex-shrink: 0; box-shadow: 0 8px 25px rgba(37, 99, 235, 0.4); border: 4px solid white; display: flex; align-items: center; justify-content: center; }
     </style>
 </head>
@@ -71,39 +72,35 @@
 
     <div id="scanUI" class="fixed inset-0 bg-black z-[999] hidden flex-col">
         <div class="p-4 flex justify-between items-center bg-slate-900 text-white border-b-2 border-blue-500">
-            <span class="font-bold text-blue-400">iPad 扫描模式</span>
+            <span class="font-bold text-blue-400">扫描模式 (高性能)</span>
             <button onclick="stopScanning()" class="bg-red-600 px-10 py-3 rounded-full font-black">退出</button>
         </div>
         <div class="relative flex-1 overflow-hidden bg-black">
-            <video id="v" class="w-full h-full object-cover" playsinline muted autocomplete="off"></video>
+            <video id="v" class="w-full h-full object-cover" playsinline muted></video>
             <div class="scan-frame"><div class="scan-line"></div></div>
         </div>
     </div>
 
     <script>
         const VER = "SR_V50_ULTRA_SENSITIVE";
-        let db = [];
-        let columns = [];
-        let widths = {};
-        let lastScannedCode = "";
-        let lastScannedTime = 0;
+        let db = []; let columns = []; let widths = {};
+        let lastScannedCode = ""; let lastScannedTime = 0;
 
-        // 初始化加载，使用 try-catch 防止崩溃
         try {
             db = JSON.parse(localStorage.getItem(VER+'_DATA')) || [];
             columns = JSON.parse(localStorage.getItem(VER+'_COLS')) || [];
             widths = JSON.parse(localStorage.getItem(VER+'_W')) || {};
-        } catch(e) { console.error("Data Load Error"); }
+        } catch(e) {}
 
         const hints = new Map();
         hints.set(ZXing.DecodeHintType.TRY_HARDER, true); 
         hints.set(ZXing.DecodeHintType.CHARACTER_SET, 'utf-8');
         const zxing = new ZXing.BrowserMultiFormatReader(hints);
+        // 安卓端关键参数：减小解码尝试间隔至 50ms（接近实时）
+        zxing.timeBetweenDecodingAttempts = 50;
 
-        // 绑定确认按钮事件（iPad 兼容写法）
         document.getElementById('confirmBtn').onclick = function() {
-            const val = document.getElementById('manualInput').value;
-            handleBarcode(val);
+            handleBarcode(document.getElementById('manualInput').value);
         };
 
         function playSound(isSuccess) {
@@ -121,10 +118,15 @@
             document.getElementById('scanUI').style.display = 'flex';
             try {
                 const constraints = {
-                    video: { facingMode: "environment", width: { ideal: 1280 }, height: { ideal: 720 } }
+                    video: { 
+                        facingMode: "environment", 
+                        width: { ideal: 1280 }, 
+                        height: { ideal: 720 },
+                        // 安卓专用：尝试强制 60 帧或更高
+                        frameRate: { ideal: 60, min: 30 }
+                    }
                 };
                 
-                // iPad 必须先调用 decodeFromConstraints 触发权限请求
                 zxing.decodeFromConstraints(constraints, 'v', (res, err) => {
                     if (res) {
                         const code = res.getText();
@@ -134,26 +136,34 @@
                         handleBarcode(code, true);
                     }
                 });
-            } catch (err) { alert("请在设置中允许浏览器访问摄像头"); stopScanning(); }
+
+                // 安卓补丁：每秒重置一次对焦，解决安卓“假死”不扫的问题
+                const videoEl = document.getElementById('v');
+                setTimeout(() => {
+                    const track = videoEl.srcObject?.getVideoTracks()[0];
+                    if (track && track.getCapabilities) {
+                        const cap = track.getCapabilities();
+                        setInterval(() => {
+                            if (cap.focusMode?.includes('continuous')) {
+                                track.applyConstraints({advanced: [{focusMode: 'continuous'}]}).catch(()=>{});
+                            }
+                        }, 1200);
+                    }
+                }, 1000);
+
+            } catch (err) { alert("相机启动失败，请检查权限"); stopScanning(); }
         }
 
-        function stopScanning() { 
-            zxing.reset(); 
-            document.getElementById('scanUI').style.display = 'none'; 
-        }
+        function stopScanning() { zxing.reset(); document.getElementById('scanUI').style.display = 'none'; }
 
         function handleBarcode(code, fromCam = false) {
             if(!code) return;
             const target = String(code).trim().toLowerCase();
             document.getElementById('manualInput').value = '';
-
-            const idx = db.findIndex(row => {
-                return Object.values(row).some(v => v !== null && String(v).trim().toLowerCase() === target);
-            });
+            const idx = db.findIndex(row => Object.values(row).some(v => v !== null && String(v).trim().toLowerCase() === target));
             
             if (idx !== -1) {
-                playSound(true);
-                render();
+                playSound(true); render();
                 const rowEl = document.getElementById(`r-${idx}`);
                 const inputEl = document.getElementById(`in-${idx}-实际数量`);
                 document.querySelectorAll('tr').forEach(tr => tr.classList.remove('row-focus'));
@@ -165,7 +175,7 @@
                 if(fromCam) stopScanning();
             } else {
                 playSound(false); 
-                alert("⚠️ 未找到条码: " + target);
+                alert("⚠️ 未找到: " + target);
             }
         }
 
@@ -186,12 +196,9 @@
         };
 
         function render() {
-            const h = document.getElementById('tHead');
-            const b = document.getElementById('tBody');
+            const h = document.getElementById('tHead'); const b = document.getElementById('tBody');
             if (!columns || !columns.length) return;
-            
             h.innerHTML = `<tr>${columns.map(c => `<th id="th-${c}" style="width: ${widths[c] || 130}px">${c}<div class="resizer" ontouchstart="initResize(event, '${c}')"></div></th>`).join('')}</tr>`;
-            
             b.innerHTML = db.map((row, rIdx) => {
                 const cells = columns.map(c => {
                     const isQty = (c === '实际数量');
@@ -207,62 +214,35 @@
             localStorage.setItem(VER+'_COLS', JSON.stringify(columns)); 
             localStorage.setItem(VER+'_W', JSON.stringify(widths)); 
         }
-        
         function openColModal() { document.getElementById('colModal').style.display = 'flex'; renderColList(); }
         function closeColModal() { document.getElementById('colModal').style.display = 'none'; }
-        
         function renderColList() {
-            const list = document.getElementById('colList');
-            list.innerHTML = columns.map((c, i) => `
+            document.getElementById('colList').innerHTML = columns.map((c, i) => `
                 <div class="flex items-center justify-between bg-slate-50 p-4 rounded-xl border">
                     <span class="font-bold text-lg text-slate-700">${c}</span>
-                    <div class="flex gap-2">
-                        <button onclick="moveCol(${i},-1)" class="p-3 border rounded bg-white">⬆️</button>
-                        <button onclick="deleteCol('${c}')" class="p-3 text-red-600 font-bold">删除</button>
-                    </div>
+                    <div class="flex gap-2"><button onclick="moveCol(${i},-1)" class="p-3 border rounded">⬆️</button><button onclick="deleteCol('${c}')" class="p-3 text-red-600 font-bold">删除</button></div>
                 </div>`).join('');
         }
-        
-        function moveCol(i, d) { 
-            let t = i + d; 
-            if (t>=0 && t<columns.length) { 
-                [columns[i], columns[t]] = [columns[t], columns[i]]; 
-                renderColList(); push(); render(); 
-            } 
-        }
-
+        function moveCol(i, d) { let t = i + d; if (t>=0 && t<columns.length) { [columns[i], columns[t]] = [columns[t], columns[i]]; renderColList(); push(); render(); } }
         function addColumn() {
             const n = document.getElementById('newColName').value.trim();
-            if (n && !columns.includes(n)) { 
-                columns.push(n); db.forEach(r => r[n] = ""); 
-                document.getElementById('newColName').value = '';
-                push(); renderColList(); render(); 
-            }
+            if (n && !columns.includes(n)) { columns.push(n); db.forEach(r => r[n] = ""); push(); renderColList(); render(); }
         }
-
         function deleteCol(n) { if(confirm("确定删除该列？")) { columns = columns.filter(c => c !== n); push(); renderColList(); render(); } }
-
         function initResize(e, c) {
             const sX = e.touches[0].pageX; const sW = widths[c] || 130;
             const onM = (ev) => { widths[c] = Math.max(50, sW + (ev.touches[0].pageX - sX)); render(); };
             document.addEventListener('touchmove', onM);
             document.addEventListener('touchend', () => { document.removeEventListener('touchmove', onM); push(); }, {once:true});
         }
-
         function exportExcel() {
-            try {
-                const ws = XLSX.utils.json_to_sheet(db, { header: columns });
-                const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, "Inventory");
-                XLSX.writeFile(wb, `Stock_V50_${new Date().toLocaleDateString()}.xlsx`);
-            } catch(e) { alert("导出失败，请检查数据"); }
+            const ws = XLSX.utils.json_to_sheet(db, { header: columns });
+            const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, "Inventory");
+            XLSX.writeFile(wb, `Stock_V50_${new Date().toLocaleDateString()}.xlsx`);
         }
-
         function hardReset() { if(confirm("⚠️ 确定清空所有数据重新开始吗？")) { localStorage.clear(); location.reload(); } }
-        
         document.getElementById('manualInput').onkeydown = function(e) { if (e.key === 'Enter') handleBarcode(this.value); };
-        
-        // 初始渲染
-        if (columns && columns.length > 0) render();
+        if (columns.length) render();
     </script>
 </body>
 </html>
