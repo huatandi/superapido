@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes, viewport-fit=cover">
-    <title>飞速盘点 S1.7 - 智能音控版</title>
+    <title>飞速盘点 S1.6 - 超灵敏扫码版</title>
     <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
     <script src="https://unpkg.com/@zxing/library@0.19.1"></script>
     <script src="https://cdn.tailwindcss.com"></script>
@@ -28,11 +28,12 @@
         .table-container { 
             background: white; 
             border: 1px solid #e2e8f0; 
-            height: 45vh; 
+            height: 50vh; 
             overflow: auto; 
             border-radius: 12px; 
             -webkit-overflow-scrolling: touch;
             touch-action: pan-x pan-y pinch-zoom;
+            position: relative;
         }
         table { 
             border-collapse: separate; 
@@ -126,16 +127,6 @@
             justify-content:center;
             backdrop-filter: blur(8px);
         }
-        #volumeModal {
-            display:none;
-            position:fixed;
-            inset:0;
-            background:rgba(0,0,0,0.9);
-            z-index:9999;
-            align-items:center;
-            justify-content:center;
-            backdrop-filter: blur(8px);
-        }
         .modal-content {
             background: white;
             border-radius: 24px;
@@ -156,6 +147,7 @@
             box-shadow: 0 0 0 2000px rgba(0,0,0,0.75); 
             z-index: 10; 
             pointer-events: none; 
+            background: rgba(0,0,0,0.1);
         }
         .scan-line { 
             position: absolute; 
@@ -239,23 +231,6 @@
             0%, 100% { border-color: #3b82f6; }
             50% { border-color: #10b981; box-shadow: 0 0 0 2000px rgba(16,185,129,0.3); }
         }
-        .volume-slider {
-            -webkit-appearance: none;
-            width: 100%;
-            height: 8px;
-            border-radius: 5px;
-            background: #3b82f6;
-            outline: none;
-        }
-        .volume-slider::-webkit-slider-thumb {
-            -webkit-appearance: none;
-            width: 25px;
-            height: 25px;
-            border-radius: 50%;
-            background: #1e40af;
-            cursor: pointer;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
-        }
         @media (max-width: 480px) {
             .action-btn {
                 font-size: 10px;
@@ -273,28 +248,6 @@
 </head>
 <body>
     <div id="toast"></div>
-
-    <!-- 音量控制弹窗 -->
-    <div id="volumeModal">
-        <div class="modal-content p-6">
-            <h2 class="text-2xl font-bold mb-4 text-center">🔊 音量设置</h2>
-            <div class="space-y-4">
-                <div>
-                    <label class="text-gray-700 font-bold block mb-2">🔊 提示音量</label>
-                    <input type="range" id="volumeSlider" min="0" max="100" value="70" class="volume-slider">
-                    <div class="flex justify-between mt-2">
-                        <span class="text-sm">🔇 静音</span>
-                        <span class="text-sm font-bold" id="volumeValue">70%</span>
-                        <span class="text-sm">🔊 最大</span>
-                    </div>
-                </div>
-                <div class="flex gap-2 mt-4">
-                    <button onclick="testSound()" class="flex-1 bg-blue-600 text-white py-3 rounded-xl font-bold">🔊 测试声音</button>
-                    <button onclick="closeVolumeModal()" class="flex-1 bg-gray-600 text-white py-3 rounded-xl font-bold">完成</button>
-                </div>
-            </div>
-        </div>
-    </div>
 
     <div id="colModal">
         <div class="modal-content p-5">
@@ -314,11 +267,11 @@
             <div class="flex items-center justify-between">
                 <div>
                     <h1 class="text-2xl font-black tracking-tight">🚀 飞速盘点</h1>
-                    <div class="version-badge inline-block mt-0.5">S1.7</div>
+                    <div class="version-badge inline-block mt-0.5">S1.6</div>
                 </div>
-                <button onclick="openVolumeModal()" class="bg-white/20 backdrop-blur px-3 py-1 rounded-full text-sm font-bold active:scale-95 transition">
-                    🔊 音量
-                </button>
+                <div class="text-right text-xs opacity-90">
+                    超灵敏扫码
+                </div>
             </div>
         </div>
 
@@ -348,6 +301,7 @@
                 </label>
             </div>
 
+            <!-- 表格容器 - 支持双指缩放 -->
             <div class="table-container" id="tableContainer">
                 <div style="touch-action: pan-x pan-y pinch-zoom; width: 100%; height: 100%; overflow: auto;">
                     <table id="mainTable" style="touch-action: pan-x pan-y pinch-zoom; width: 100%;">
@@ -384,7 +338,7 @@
     </div>
 
     <script>
-        const VERSION = "S1.7";
+        const VERSION = "S1.6";
         const STORAGE_KEY = "FEISUPANDIAN_" + VERSION;
         
         let db = [];
@@ -395,100 +349,6 @@
         let lastCode = "";
         let lastTime = 0;
         let currentFocusInterval = null;
-        let audioContext = null;
-        let currentVolume = 70; // 默认音量 70%
-
-        // 加载音量设置
-        function loadVolumeSetting() {
-            try {
-                const savedVolume = localStorage.getItem(STORAGE_KEY + "_VOLUME");
-                if (savedVolume !== null) {
-                    currentVolume = parseInt(savedVolume);
-                    const slider = document.getElementById('volumeSlider');
-                    const valueSpan = document.getElementById('volumeValue');
-                    if (slider) slider.value = currentVolume;
-                    if (valueSpan) valueSpan.textContent = currentVolume + "%";
-                }
-            } catch(e) {}
-        }
-
-        // 保存音量设置
-        function saveVolumeSetting() {
-            try {
-                localStorage.setItem(STORAGE_KEY + "_VOLUME", currentVolume);
-            } catch(e) {}
-        }
-
-        // 打开音量控制
-        function openVolumeModal() {
-            document.getElementById('volumeModal').style.display = 'flex';
-        }
-
-        function closeVolumeModal() {
-            document.getElementById('volumeModal').style.display = 'none';
-        }
-
-        // 音量滑块事件
-        document.getElementById('volumeSlider')?.addEventListener('input', (e) => {
-            currentVolume = parseInt(e.target.value);
-            document.getElementById('volumeValue').textContent = currentVolume + "%";
-            saveVolumeSetting();
-        });
-
-        // 测试声音
-        function testSound() {
-            playBeep(true, true); // 强制播放测试音
-        }
-
-        // 增强的播放声音（带音量控制）
-        function playBeep(success, forcePlay = false) {
-            if (currentVolume === 0 && !forcePlay) return;
-            
-            try {
-                if (!audioContext) {
-                    audioContext = new (window.AudioContext || window.webkitAudioContext)();
-                }
-                if (audioContext.state === 'suspended') {
-                    audioContext.resume();
-                }
-                
-                const oscillator = audioContext.createOscillator();
-                const gainNode = audioContext.createGain();
-                oscillator.connect(gainNode);
-                gainNode.connect(audioContext.destination);
-                
-                // 成功: 1200Hz, 失败: 400Hz
-                oscillator.frequency.value = success ? 1200 : 400;
-                
-                // 音量控制 (0-100 转换为 0-0.5)
-                const volume = currentVolume / 100 * 0.5;
-                gainNode.gain.setValueAtTime(volume, audioContext.currentTime);
-                
-                oscillator.start();
-                gainNode.gain.exponentialRampToValueAtTime(0.00001, audioContext.currentTime + 0.2);
-                oscillator.stop(audioContext.currentTime + 0.2);
-                
-            } catch(e) {
-                console.log('Audio error:', e);
-            }
-        }
-
-        // 震动反馈
-        function vibrate() {
-            if (window.navigator && window.navigator.vibrate) {
-                window.navigator.vibrate(30);
-            }
-        }
-
-        function showToast(msg, isError = false) {
-            const toast = document.getElementById('toast');
-            toast.textContent = msg;
-            toast.style.background = isError ? '#dc2626' : '#10b981';
-            toast.style.display = 'block';
-            setTimeout(() => {
-                toast.style.display = 'none';
-            }, 2000);
-        }
 
         // 加载数据
         function loadData() {
@@ -530,8 +390,43 @@
             }
         }
 
+        function showToast(msg, isError = false) {
+            const toast = document.getElementById('toast');
+            toast.textContent = msg;
+            toast.style.background = isError ? '#dc2626' : '#10b981';
+            toast.style.display = 'block';
+            setTimeout(() => {
+                toast.style.display = 'none';
+            }, 2000);
+        }
+
+        // 增强的播放声音（音量加大）
+        function playBeep(success) {
+            try {
+                const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                const oscillator = audioCtx.createOscillator();
+                const gainNode = audioCtx.createGain();
+                oscillator.connect(gainNode);
+                gainNode.connect(audioCtx.destination);
+                oscillator.frequency.value = success ? 1200 : 400;
+                // 提高音量：从 0.15 提升到 0.4
+                gainNode.gain.value = 0.4;
+                oscillator.start();
+                gainNode.gain.exponentialRampToValueAtTime(0.00001, audioCtx.currentTime + 0.2);
+                oscillator.stop(audioCtx.currentTime + 0.2);
+                audioCtx.resume();
+            } catch(e) {}
+        }
+
+        function vibrate() {
+            if (window.navigator && window.navigator.vibrate) {
+                window.navigator.vibrate(30);
+            }
+        }
+
         // 强制关闭扫描并跳转
         function stopScanningAndJump(foundIndex, productName) {
+            // 1. 先关闭扫描界面
             scanning = false;
             
             if (currentFocusInterval) {
@@ -556,15 +451,31 @@
             const scanUI = document.getElementById('scanUI');
             scanUI.style.display = 'none';
             
+            // 2. 等待扫描界面完全关闭后再跳转
             setTimeout(() => {
+                // 重新渲染表格确保最新数据
                 render();
+                
+                // 3. 跳转到指定行
                 setTimeout(() => {
                     const rowEl = document.getElementById(`row-${foundIndex}`);
                     if (rowEl) {
-                        document.querySelectorAll('#mainTable tbody tr').forEach(tr => tr.classList.remove('row-focus'));
-                        rowEl.classList.add('row-focus');
-                        rowEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        // 移除所有高亮
+                        document.querySelectorAll('#mainTable tbody tr').forEach(tr => {
+                            tr.classList.remove('row-focus');
+                        });
                         
+                        // 添加高亮
+                        rowEl.classList.add('row-focus');
+                        
+                        // 滚动到可视区域
+                        rowEl.scrollIntoView({ 
+                            behavior: 'smooth', 
+                            block: 'center',
+                            inline: 'center'
+                        });
+                        
+                        // 聚焦数量输入框
                         const qtyInput = document.getElementById(`qty-${foundIndex}`);
                         if (qtyInput) {
                             setTimeout(() => {
@@ -585,24 +496,27 @@
             }, 50);
         }
 
-        // 条码识别
+        // 超快速条码识别（优化匹配算法）
         function handleBarcode(code, fromCamera = false) {
             if (!code) return false;
             
             const now = Date.now();
             const codeStr = String(code).trim();
             
+            // 防重复（100ms）
             if (codeStr === lastCode && (now - lastTime) < 100) {
                 return false;
             }
             lastCode = codeStr;
             lastTime = now;
             
+            // 快速查找
             let foundIndex = -1;
             const codeLower = codeStr.toLowerCase();
             
             for (let i = 0; i < db.length; i++) {
                 const row = db[i];
+                // 精确匹配
                 for (let key in row) {
                     const val = String(row[key] || '').trim();
                     if (val === codeStr) {
@@ -612,6 +526,7 @@
                 }
                 if (foundIndex !== -1) break;
                 
+                // 包含匹配
                 for (let key in row) {
                     const val = String(row[key] || '').trim().toLowerCase();
                     if (val && val.includes(codeLower) && 
@@ -624,21 +539,25 @@
             }
             
             if (foundIndex !== -1) {
+                // 成功反馈 - 加大音量
                 playBeep(true);
                 vibrate();
                 
                 const productName = db[foundIndex]['商品名称'] || db[foundIndex]['名称'] || codeStr;
                 showToast(`✅ ${productName}`, false);
                 
+                // 扫描框闪烁效果
                 const scanFrame = document.getElementById('scanFrame');
                 if (scanFrame) {
                     scanFrame.classList.add('scan-success');
                     setTimeout(() => scanFrame.classList.remove('scan-success'), 200);
                 }
                 
+                // 关键修复：从相机扫码时，关闭扫描并跳转
                 if (fromCamera) {
                     stopScanningAndJump(foundIndex, productName);
                 } else {
+                    // 手动输入时，直接跳转
                     render();
                     setTimeout(() => {
                         const rowEl = document.getElementById(`row-${foundIndex}`);
@@ -665,7 +584,7 @@
             }
         }
 
-        // 启动扫描
+        // 启动超灵敏扫描
         async function startScanning() {
             if (scanning) {
                 showToast("扫描器已在运行", false);
@@ -684,6 +603,7 @@
             }
             
             try {
+                // iOS 和 安卓 兼容配置
                 const constraints = {
                     video: {
                         facingMode: { exact: "environment" },
@@ -693,6 +613,7 @@
                     }
                 };
                 
+                // 尝试不带 exact 的配置（兼容性更好）
                 let finalConstraints = constraints;
                 try {
                     await navigator.mediaDevices.getUserMedia(constraints);
@@ -706,6 +627,7 @@
                     };
                 }
                 
+                // 配置解码器 - 最大灵敏度
                 const hints = new Map();
                 hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
                 hints.set(ZXing.DecodeHintType.CHARACTER_SET, "UTF-8");
@@ -719,10 +641,13 @@
                     ZXing.BarcodeFormat.CODE_93,
                     ZXing.BarcodeFormat.CODE_128,
                     ZXing.BarcodeFormat.ITF,
-                    ZXing.BarcodeFormat.CODABAR
+                    ZXing.BarcodeFormat.CODABAR,
+                    ZXing.BarcodeFormat.DATA_MATRIX,
+                    ZXing.BarcodeFormat.PDF_417
                 ]);
                 
                 reader = new ZXing.BrowserMultiFormatReader(hints);
+                // 极速解码 - 30ms 间隔（最快速度）
                 reader.timeBetweenDecodingAttempts = 30;
                 
                 await reader.decodeFromConstraints(finalConstraints, 'video', (result, error) => {
@@ -734,8 +659,9 @@
                     }
                 });
                 
-                showToast("超灵敏扫描已启动 | 音量可调", false);
+                showToast("超灵敏扫描已启动 | 支持倾斜/反光", false);
                 
+                // 增强对焦控制（iOS/安卓通用）
                 const videoEl = document.getElementById('video');
                 const focusInterval = setInterval(() => {
                     if (!scanning) {
@@ -746,9 +672,16 @@
                         const track = videoEl.srcObject.getVideoTracks()[0];
                         if (track && track.getCapabilities) {
                             const caps = track.getCapabilities();
+                            // 连续对焦
                             if (caps.focusMode && caps.focusMode.includes('continuous')) {
                                 track.applyConstraints({
                                     advanced: [{ focusMode: 'continuous' }]
+                                }).catch(() => {});
+                            }
+                            // 自动曝光
+                            if (caps.exposureMode && caps.exposureMode.includes('continuous')) {
+                                track.applyConstraints({
+                                    advanced: [{ exposureMode: 'continuous' }]
                                 }).catch(() => {});
                             }
                         }
@@ -824,7 +757,7 @@
                                     class="w-full p-2 text-xs outline-none bg-transparent"
                                     onchange="updateCell(${idx}, '${col}', this.value)" />`
                             }
-                         </td>
+                        </td>
                     `).join('')}
                 </tr>
             `).join('');
@@ -884,39 +817,53 @@
                             <span class="font-bold text-sm">${idx + 1}. ${col}</span>
                         </div>
                         <div class="flex gap-1">
-                            <button onclick="moveColumnUp(${idx})" class="bg-blue-500 text-white px-2 py-1 rounded text-xs">⬆️</button>
-                            <button onclick="moveColumnDown(${idx})" class="bg-blue-500 text-white px-2 py-1 rounded text-xs">⬇️</button>
-                            <button onclick="deleteColumn('${col}')" class="bg-red-500 text-white px-2 py-1 rounded text-xs">删</button>
+                            <button onclick="moveColumnUp(${idx})" class="bg-blue-500 text-white px-2 py-1 rounded text-xs">
+                                ⬆️
+                            </button>
+                            <button onclick="moveColumnDown(${idx})" class="bg-blue-500 text-white px-2 py-1 rounded text-xs">
+                                ⬇️
+                            </button>
+                            <button onclick="deleteColumn('${col}')" class="bg-red-500 text-white px-2 py-1 rounded text-xs">
+                                删
+                            </button>
                         </div>
                     </div>
                 </div>
             `).join('');
+            
             setupDragAndDrop();
         }
         
         function setupDragAndDrop() {
             const items = document.querySelectorAll('.col-item');
             let draggedItem = null;
+            
             items.forEach(item => {
                 item.setAttribute('draggable', 'true');
+                
                 item.addEventListener('dragstart', (e) => {
                     draggedItem = item;
                     item.style.opacity = '0.5';
                     e.dataTransfer.effectAllowed = 'move';
                 });
+                
                 item.addEventListener('dragend', (e) => {
                     item.style.opacity = '';
                     draggedItem = null;
                 });
+                
                 item.addEventListener('dragover', (e) => {
                     e.preventDefault();
                     e.dataTransfer.dropEffect = 'move';
                 });
+                
                 item.addEventListener('drop', (e) => {
                     e.preventDefault();
                     if (!draggedItem || draggedItem === item) return;
+                    
                     const fromIndex = parseInt(draggedItem.getAttribute('data-index'));
                     const toIndex = parseInt(item.getAttribute('data-index'));
+                    
                     if (!isNaN(fromIndex) && !isNaN(toIndex)) {
                         const temp = columns[fromIndex];
                         columns[fromIndex] = columns[toIndex];
@@ -968,4 +915,131 @@
             const newCol = document.getElementById('newColName').value.trim();
             if (newCol && !columns.includes(newCol)) {
                 columns.push(newCol);
-                db.forEach
+                db.forEach(row => row[newCol] = '');
+                renderColList();
+                render();
+                saveData();
+                showToast(`已添加列: ${newCol}`, false);
+                document.getElementById('newColName').value = '';
+            } else if (columns.includes(newCol)) {
+                showToast("列名已存在", true);
+            }
+        }
+        
+        function deleteColumn(colName) {
+            if (confirm(`确定删除列 "${colName}" 吗？数据将丢失！`)) {
+                const index = columns.indexOf(colName);
+                if (index !== -1) {
+                    columns.splice(index, 1);
+                    db.forEach(row => delete row[colName]);
+                    renderColList();
+                    render();
+                    saveData();
+                    showToast(`已删除列: ${colName}`, false);
+                }
+            }
+        }
+        
+        document.getElementById('fileInput').onchange = (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+            
+            showToast("正在导入...", false);
+            const fileReader = new FileReader();
+            fileReader.onload = (ev) => {
+                try {
+                    const data = new Uint8Array(ev.target.result);
+                    const workbook = XLSX.read(data, { type: 'array' });
+                    const sheet = workbook.Sheets[workbook.SheetNames[0]];
+                    const json = XLSX.utils.sheet_to_json(sheet, { defval: "" });
+                    
+                    if (json.length > 0) {
+                        columns = Object.keys(json[0]);
+                        if (!columns.includes('实际数量')) {
+                            columns.unshift('实际数量');
+                        }
+                        db = json.map(row => {
+                            const newRow = { ...row };
+                            if (newRow['实际数量'] === undefined) newRow['实际数量'] = '';
+                            return newRow;
+                        });
+                        saveData();
+                        render();
+                        showToast(`✅ 导入成功！共 ${db.length} 条数据`, false);
+                    } else {
+                        showToast("文件无数据", true);
+                    }
+                } catch(err) {
+                    showToast("解析失败", true);
+                }
+            };
+            fileReader.readAsArrayBuffer(file);
+            e.target.value = '';
+        };
+        
+        function exportExcel() {
+            if (!db.length) {
+                showToast("暂无数据可导出", true);
+                return;
+            }
+            const ws = XLSX.utils.json_to_sheet(db, { header: columns });
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, "库存数据");
+            const fileName = `飞速盘点_${new Date().toLocaleDateString()}.xlsx`;
+            XLSX.writeFile(wb, fileName);
+            showToast("✅ 导出成功", false);
+        }
+        
+        function hardReset() {
+            if (confirm("⚠️ 确定清空所有数据吗？此操作不可恢复！")) {
+                localStorage.removeItem(STORAGE_KEY);
+                db = [];
+                columns = ['实际数量', '商品名称', '编码', '价格'];
+                widths = {};
+                saveData();
+                render();
+                showToast("已清空所有数据", false);
+            }
+        }
+        
+        window.addEventListener('beforeunload', () => {
+            if (scanning) {
+                stopScanning(true);
+            }
+        });
+        
+        // 初始化
+        loadData();
+        render();
+        
+        // 绑定事件
+        document.getElementById('confirmBtn').onclick = () => {
+            const input = document.getElementById('manualInput');
+            if (input.value.trim()) {
+                handleBarcode(input.value, false);
+                input.value = '';
+            }
+        };
+        
+        document.getElementById('manualInput').onkeypress = (e) => {
+            if (e.key === 'Enter') {
+                const input = e.target;
+                if (input.value.trim()) {
+                    handleBarcode(input.value, false);
+                    input.value = '';
+                }
+            }
+        };
+        
+        document.getElementById('scanBtn').onclick = () => {
+            if (scanning) {
+                stopScanning(true);
+            } else {
+                startScanning();
+            }
+        };
+        
+        console.log(`🚀 飞速盘点 ${VERSION} 已启动 | 提示音音量已加大 | 支持双指缩放`);
+    </script>
+</body>
+</html>
