@@ -54,7 +54,7 @@
                 <div class="flex flex-col gap-1">
                     <input type="text" id="manualInput" placeholder="点击手动输入或连接扫码枪..." autofocus
                         class="w-full border-4 border-blue-50 border-b-blue-200 rounded-xl px-4 h-12 font-bold outline-none focus:border-blue-600 text-lg" />
-                    <button onclick="handleBarcode(manualInput.value)" class="w-full bg-blue-700 text-white py-3 rounded-xl font-black text-lg shadow-lg active:scale-95">确 认 / Confirmar</button>
+                    <button onclick="handleBarcode(document.getElementById('manualInput').value)" class="w-full bg-blue-700 text-white py-3 rounded-xl font-black text-lg shadow-lg active:scale-95">确 认 / Confirmar</button>
                 </div>
                 <label class="bg-slate-50 text-slate-400 h-10 flex items-center justify-center rounded-xl border-2 border-dashed border-slate-200 text-[10px] font-black uppercase">
                     📂 导入 EXCEL <input type="file" id="fileInput" class="hidden" accept=".xlsx, .xls" />
@@ -81,8 +81,7 @@
     </div>
 
     <script>
-        // 保持原始标识符，确保能读取你之前的数据
-        const VER = "SR_V50_ULTRA_SENSITIVE"; 
+        const VER = "SR_V50_ULTRA_SENSITIVE";
         let db = JSON.parse(localStorage.getItem(VER+'_DATA')) || [];
         let columns = JSON.parse(localStorage.getItem(VER+'_COLS')) || [];
         let widths = JSON.parse(localStorage.getItem(VER+'_W')) || {};
@@ -126,6 +125,10 @@
                 zxing.decodeFromConstraints(constraints, 'v', (res) => {
                     if (res) {
                         const code = res.getText();
+                        const now = Date.now();
+                        // 1.5秒冷却逻辑，防止连扫
+                        if (code === lastScannedCode && (now - lastScannedTime < 1500)) return;
+                        lastScannedCode = code; lastScannedTime = now;
                         handleBarcode(code, true);
                     }
                 });
@@ -142,27 +145,97 @@
                         }, 2500);
                     }
                 }, 1000);
-
             } catch (err) { showMsg("相机未能启动"); stopScanning(); }
         }
 
         function stopScanning() { zxing.reset(); document.getElementById('scanUI').style.display = 'none'; }
 
-        // --- 核心修复：1.5秒冷却 + 匹配失败不关相机 ---
         function handleBarcode(code, fromCam = false) {
             if(!code) return;
-
-            const now = Date.now();
-            // 冷却锁：1.5秒内禁止第二次识别
-            if (fromCam && (now - lastScannedTime < 1500)) return; 
-            lastScannedTime = now; 
-
             const target = String(code).trim().toLowerCase();
-            const manualIn = document.getElementById('manualInput');
-            if (manualIn) manualIn.value = '';
+            const inputField = document.getElementById('manualInput');
+            if(inputField) inputField.value = '';
 
             const idx = db.findIndex(row => Object.values(row).some(v => v !== null && String(v).trim().toLowerCase() === target));
             
             if (idx !== -1) {
                 playSound(true); render();
-                const rowEl = document.getElementById(`r-${idx
+                const rowEl = document.getElementById(`r-${idx}`);
+                const inputEl = document.getElementById(`in-${idx}-实际数量`);
+                document.querySelectorAll('tr').forEach(tr => tr.classList.remove('row-focus'));
+                if (rowEl) {
+                    rowEl.classList.add('row-focus');
+                    rowEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    setTimeout(() => { if(inputEl){inputEl.focus(); inputEl.select();} }, 300);
+                }
+                if(fromCam) stopScanning();
+            } else {
+                playSound(false); 
+                showMsg("⚠️ 未找到: " + target);
+                // 没找到时不关闭相机，等待扫下一个
+            }
+        }
+
+        document.getElementById('fileInput').onchange = (e) => {
+            const file = e.target.files[0]; if (!file) return;
+            const r = new FileReader();
+            r.onload = (ev) => {
+                const data = new Uint8Array(ev.target.result);
+                const wb = XLSX.read(data, { type: 'array' });
+                const json = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { defval: "" });
+                if (json.length) {
+                    columns = Object.keys(json[0]);
+                    if (!columns.includes('实际数量')) columns.unshift('实际数量');
+                    db = json; push(); render(); showMsg("✅ 数据已加载", false);
+                }
+            };
+            r.readAsArrayBuffer(file);
+        };
+
+        function render() {
+            const h = document.getElementById('tHead'); const b = document.getElementById('tBody');
+            if (!columns.length) return;
+            h.innerHTML = `<tr>${columns.map(c => `<th id="th-${c}" style="width: ${widths[c] || 130}px">${c}<div class="resizer" ontouchstart="initResize(event, '${c}')"></div></th>`).join('')}</tr>`;
+            b.innerHTML = db.map((row, rIdx) => `<tr id="r-${rIdx}">${columns.map(c => `<td><input id="in-${rIdx}-${c}" type="${c==='实际数量'?'number':'text'}" value="${row[c]||''}" class="${c==='实际数量'?'qty-input':'p-2 w-full text-[13px] outline-none bg-transparent'}" onchange="saveVal(${rIdx},'${c}',this.value)" /></td>`).join('')}</tr>`).join('');
+        }
+
+        function saveVal(r, c, v) { db[r][c] = v; push(); }
+        function push() { localStorage.setItem(VER+'_DATA', JSON.stringify(db)); localStorage.setItem(VER+'_COLS', JSON.stringify(columns)); localStorage.setItem(VER+'_W', JSON.stringify(widths)); }
+        function openColModal() { document.getElementById('colModal').style.display = 'flex'; renderColList(); }
+        function closeColModal() { document.getElementById('colModal').style.display = 'none'; }
+        function renderColList() {
+            document.getElementById('colList').innerHTML = columns.map((c, i) => `
+                <div class="flex items-center justify-between bg-slate-50 p-4 rounded-xl border">
+                    <span class="font-bold text-lg text-slate-700">${c}</span>
+                    <div class="flex gap-2"><button onclick="moveCol(${i},-1)" class="p-3 border rounded shadow-sm bg-white">⬆️</button><button onclick="moveCol(${i},1)" class="p-3 border rounded shadow-sm bg-white">⬇️</button><button onclick="deleteCol('${c}')" class="p-3 text-red-600 font-bold">删除</button></div>
+                </div>`).join('');
+        }
+        function moveCol(i, d) { let t = i + d; if (t>=0 && t<columns.length) { [columns[i], columns[t]] = [columns[t], columns[i]]; renderColList(); push(); render(); } }
+        function addColumn() {
+            const n = document.getElementById('newColName').value.trim();
+            if (n && !columns.includes(n)) { columns.push(n); db.forEach(r => r[n] = ""); push(); renderColList(); render(); }
+        }
+        function deleteCol(n) { if(confirm("确定删除该列？")) { columns = columns.filter(c => c !== n); push(); renderColList(); render(); } }
+        function initResize(e, c) {
+            const sX = e.touches[0].pageX; const sW = widths[c] || 130;
+            const onM = (ev) => { widths[c] = Math.max(50, sW + (ev.touches[0].pageX - sX)); render(); };
+            document.addEventListener('touchmove', onM);
+            document.addEventListener('touchend', () => document.removeEventListener('touchmove', onM), {once:true});
+        }
+        function showMsg(txt, err=true) {
+            const el = document.getElementById('toast'); el.innerText = txt;
+            el.style.display = 'block'; el.style.background = err ? '#ef4444' : '#10b981';
+            setTimeout(() => el.style.display = 'none', 2000);
+        }
+        function exportExcel() {
+            const ws = XLSX.utils.json_to_sheet(db, { header: columns });
+            const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, "Inventory");
+            XLSX.writeFile(wb, `Stock_V50_${new Date().toLocaleDateString()}.xlsx`);
+        }
+        function hardReset() { if(confirm("⚠️ 确定清空所有数据重新开始吗？")) { localStorage.clear(); location.reload(); } }
+        
+        document.getElementById('manualInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') handleBarcode(document.getElementById('manualInput').value); });
+        if (columns.length) render();
+    </script>
+</body>
+</html>
