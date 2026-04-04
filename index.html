@@ -1,264 +1,213 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>V50 ULTRA - 极速灵敏版</title>
-    <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
-    <script src="https://unpkg.com/@zxing/library@0.19.1"></script>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <style>
-        body { background-color: #f1f5f9; touch-action: pan-x pan-y; font-family: sans-serif; overflow: hidden; }
-        .table-container { background: white; height: 50vh; overflow: auto; border: 2px solid #0f172a; border-radius: 12px; }
-        table { border-collapse: separate; border-spacing: 0; width: max-content; }
-        th { position: sticky; top: 0; z-index: 50; background: #0f172a; color: white; padding: 12px; font-size: 13px; }
-        td { border-right: 1px solid #e2e8f0; border-bottom: 1px solid #e2e8f0; }
-        .qty-input { width: 100%; height: 60px; border: 4px solid #2563eb !important; text-align: center; font-size: 2.2rem; font-weight: 900; color: #1e40af; border-radius: 8px; background: #eff6ff; }
-        .row-focus { background-color: #fef08a !important; outline: 6px solid #ef4444; outline-offset: -6px; }
-        
-        /* 扫描辅助线 - 动态激光效果 */
-        #scanUI { position: fixed; inset: 0; background: #000; z-index: 9999; display: none; flex-direction: column; }
-        #v { width: 100%; height: 100%; object-fit: cover; }
-        .scan-frame { position: absolute; top: 40%; left: 50%; transform: translate(-50%, -50%); width: 85%; height: 180px; border: 2px solid rgba(59, 130, 246, 0.5); border-radius: 15px; box-shadow: 0 0 0 4000px rgba(0,0,0,0.7); z-index: 10; pointer-events: none; }
-        .laser-line { position: absolute; width: 100%; height: 2px; background: #ef4444; top: 50%; box-shadow: 0 0 15px #ef4444; animation: laserMove 2s infinite ease-in-out; }
-        @keyframes laserMove { 0%, 100% { top: 10%; opacity: 0.3; } 50% { top: 90%; opacity: 1; } }
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>V50 PRO FINAL</title>
 
-        #toast { position: fixed; top: 12%; left: 50%; transform: translateX(-50%); background: #ef4444; color: white; padding: 15px 30px; border-radius: 12px; z-index: 10001; display: none; font-weight: 900; box-shadow: 0 10px 30px rgba(0,0,0,0.5); text-align: center; }
-    </style>
+<script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
+<script src="https://unpkg.com/@zxing/library@0.19.1"></script>
+<script src="https://cdn.tailwindcss.com"></script>
+
+<style>
+body{background:#f1f5f9;font-family:sans-serif}
+.table-container{background:#fff;height:55vh;overflow:auto;border:2px solid #000;border-radius:10px}
+th{position:sticky;top:0;background:#111;color:#fff;padding:10px}
+td{border:1px solid #ddd}
+.qty-input{height:60px;font-size:2rem;text-align:center;border:3px solid #2563eb}
+.row-focus{background:#fef08a}
+</style>
 </head>
+
 <body class="p-2">
-    <div id="toast"></div>
 
-    <div class="flex flex-col h-screen">
-        <div class="flex items-center justify-between mb-2">
-            <h1 class="text-2xl font-black italic tracking-tighter">V50 <span class="text-blue-600">ULTRA SCAN</span></h1>
-            <div class="flex gap-2">
-                <button onclick="openColModal()" class="bg-slate-700 text-white px-3 py-2 rounded-lg text-xs font-bold shadow-md">列管理</button>
-                <button onclick="hardReset()" class="bg-red-500 text-white px-3 py-2 rounded-lg text-xs font-bold shadow-md">重置</button>
-            </div>
-        </div>
+<div class="flex gap-2 mb-2">
+<button onclick="startScanning()" class="bg-blue-600 text-white px-4 py-2">扫码</button>
+<input id="manualInput" class="border p-2 flex-1" placeholder="输入条码"/>
+<button onclick="handleManual()" class="bg-black text-white px-4">确认</button>
+</div>
 
-        <div class="bg-white p-3 rounded-2xl shadow-lg flex items-center gap-3 border-2 border-slate-100 mb-3">
-            <button onclick="startScanning()" class="w-24 h-24 bg-blue-600 rounded-full text-5xl shadow-xl flex items-center justify-center text-white active:scale-95 border-4 border-blue-200">📷</button>
-            <div class="flex-1">
-                <input type="text" id="manualInput" placeholder="输入条码..." class="w-full border-b-4 border-blue-100 p-2 text-xl font-bold outline-none mb-1 focus:border-blue-600" />
-                <button onclick="handleManual()" class="w-full bg-slate-800 text-white py-2 rounded-lg font-bold">手动确认</button>
-            </div>
-        </div>
+<input type="file" id="fileInput" class="mb-2"/>
 
-        <div class="table-container shadow-inner">
-            <table id="mainTable"><thead id="tHead"></thead><tbody id="tBody"></tbody></table>
-        </div>
+<div class="table-container">
+<table id="mainTable">
+<thead id="tHead"></thead>
+<tbody id="tBody"></tbody>
+</table>
+</div>
 
-        <div class="mt-4 space-y-2">
-            <label class="block w-full bg-slate-100 text-slate-500 text-center py-4 rounded-xl font-bold text-sm border-2 border-dashed cursor-pointer">
-                📂 导入 EXCEL <input type="file" id="fileInput" class="hidden" accept=".xlsx, .xls" />
-            </label>
-            <button onclick="exportExcel()" class="w-full bg-emerald-700 text-white py-5 rounded-2xl font-black text-xl shadow-xl border-b-4 border-emerald-900">💾 保存导出文件</button>
-        </div>
-    </div>
+<button onclick="exportExcel()" class="mt-3 bg-green-700 text-white p-3 w-full">导出Excel</button>
 
-    <div id="scanUI">
-        <div class="p-6 flex justify-between items-center text-white z-50">
-            <div class="flex flex-col"><span class="text-blue-400 font-black">极速灵敏模式</span><span class="text-[10px] text-gray-400">支持 26 位长条码/倾斜识别</span></div>
-            <button onclick="stopScanning()" class="bg-red-600 px-8 py-3 rounded-xl font-black">退出</button>
-        </div>
-        <div class="relative flex-1">
-            <video id="v" playsinline muted autoplay></video>
-            <div class="scan-frame">
-                <div class="laser-line"></div>
-                <div class="absolute -top-8 left-0 text-white bg-blue-600 px-2 py-1 text-[10px] font-bold rounded">对准条码中心线</div>
-            </div>
-        </div>
-    </div>
+<!-- 列管理 -->
+<div id="colModal" style="display:none;position:fixed;inset:0;background:#0008;">
+<div style="background:#fff;margin:50px;padding:20px">
+<div id="colList"></div>
+<input id="newColName" placeholder="新列"/>
+<button onclick="addColumn()">添加</button>
+<button onclick="closeColModal()">关闭</button>
+</div>
+</div>
 
-    <div id="colModal" class="fixed inset-0 bg-black/80 z-[1000] hidden items-center justify-center">
-        <div class="bg-white w-11/12 max-h-[80vh] rounded-3xl p-6 overflow-auto border-4 border-slate-900 text-slate-900">
-            <h2 class="text-xl font-black mb-4 border-b pb-2">列排序与管理</h2>
-            <div id="colList" class="space-y-2 mb-4"></div>
-            <div class="flex gap-2 p-2 bg-slate-100 rounded-xl mb-4">
-                <input type="text" id="newColName" placeholder="新列名" class="flex-1 bg-transparent font-bold outline-none px-2" />
-                <button onclick="addColumn()" class="bg-blue-600 text-white px-4 py-2 rounded-lg font-bold">添加</button>
-            </div>
-            <button onclick="closeColModal()" class="w-full bg-slate-900 text-white py-4 rounded-xl font-black">保存并返回</button>
-        </div>
-    </div>
+<!-- 扫码 -->
+<video id="v" style="display:none;width:100%"></video>
 
-    <script>
-        const VER = "V50_ULTRA_SENSITIVE_FINAL";
-        let db = [], columns = [], widths = {}, lastCode = "", lastTime = 0, track = null;
+<script>
 
-        // 核心：极速识别配置
-        const hints = new Map();
-        // 限制格式减少 CPU 盲目计算：主要针对一维长码
-        hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, [
-            ZXing.BarcodeFormat.CODE_128, 
-            ZXing.BarcodeFormat.EAN_13, 
-            ZXing.BarcodeFormat.CODE_39,
-            ZXing.BarcodeFormat.UPC_A
-        ]);
-        hints.set(ZXing.DecodeHintType.TRY_HARDER, true); // 深度扫描
-        const zxing = new ZXing.BrowserMultiFormatReader(hints);
-        zxing.timeBetweenDecodingAttempts = 50; // 50毫秒尝试一次，扫到即读
+const VER="FINAL_V1";
+let db=[],columns=[];
 
-        function init() {
-            try {
-                db = JSON.parse(localStorage.getItem(VER+'_DATA')) || [];
-                columns = JSON.parse(localStorage.getItem(VER+'_COLS')) || [];
-                widths = JSON.parse(localStorage.getItem(VER+'_W')) || {};
-            } catch(e) {}
-            if(columns.length) render();
-        }
+try{
+db=JSON.parse(localStorage.getItem(VER+"_DATA"))||[];
+columns=JSON.parse(localStorage.getItem(VER+"_COLS"))||[];
+}catch(e){}
 
-        function playSound(ok) {
-            try {
-                const ctx = new (window.AudioContext || window.webkitAudioContext)();
-                const osc = ctx.createOscillator(); const gain = ctx.createGain();
-                osc.connect(gain); gain.connect(ctx.destination);
-                if(ok) {
-                    osc.frequency.setValueAtTime(1000, ctx.currentTime);
-                    gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.3);
-                } else {
-                    osc.frequency.setValueAtTime(200, ctx.currentTime);
-                    gain.gain.setValueAtTime(0.5, ctx.currentTime);
-                }
-                osc.start(); osc.stop(ctx.currentTime + 0.3);
-                if(!ok) setTimeout(() => { // 失败时咚咚两声
-                    const o2 = ctx.createOscillator(); const g2 = ctx.createGain();
-                    o2.connect(g2); g2.connect(ctx.destination);
-                    o2.frequency.setValueAtTime(150, ctx.currentTime);
-                    o2.start(); o2.stop(ctx.currentTime + 0.2);
-                }, 150);
-            } catch(e) {}
-        }
+const normalize=v=>String(v).replace(/\s/g,'').toLowerCase();
 
-        async function startScanning() {
-            document.getElementById('scanUI').style.display = 'flex';
-            try {
-                const stream = await navigator.mediaDevices.getUserMedia({ 
-                    video: { facingMode: "environment", width: { ideal: 1280 }, height: { ideal: 720 } } 
-                });
-                const videoEl = document.getElementById('v');
-                videoEl.srcObject = stream;
-                track = stream.getVideoTracks()[0];
-                
-                // 强制循环对焦补丁 (针对安卓)
-                setInterval(() => {
-                    if (track && track.getCapabilities()?.focusMode?.includes('continuous')) {
-                        track.applyConstraints({advanced: [{focusMode: 'continuous'}]}).catch(()=>{});
-                    }
-                }, 1000);
+const hints=new Map();
+hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS,[
+ZXing.BarcodeFormat.CODE_128,
+ZXing.BarcodeFormat.EAN_13,
+ZXing.BarcodeFormat.EAN_8,
+ZXing.BarcodeFormat.UPC_A
+]);
+hints.set(ZXing.DecodeHintType.TRY_HARDER,true);
 
-                zxing.decodeFromVideoElement(videoEl, (res) => {
-                    if (res) {
-                        const code = res.getText();
-                        if (code === lastCode && (Date.now() - lastTime < 1500)) return;
-                        lastCode = code; lastTime = Date.now();
-                        handleBarcode(code, true);
-                    }
-                });
-            } catch (err) { alert("相机权限受限"); stopScanning(); }
-        }
+const zxing=new ZXing.BrowserMultiFormatReader(hints);
+zxing.timeBetweenDecodingAttempts=0;
 
-        function stopScanning() {
-            zxing.reset();
-            if(track) track.stop();
-            document.getElementById('scanUI').style.display = 'none';
-        }
+let lastCode="",lastTime=0;
 
-        function handleBarcode(code, fromCam = false) {
-            const target = String(code).trim().toLowerCase();
-            const idx = db.findIndex(row => Object.values(row).some(v => v && String(v).trim().toLowerCase() === target));
-            
-            if (idx !== -1) {
-                playSound(true);
-                if(fromCam) stopScanning();
-                render();
-                setTimeout(() => {
-                    const row = document.getElementById(`r-${idx}`);
-                    const input = document.getElementById(`in-${idx}-实际数量`);
-                    document.querySelectorAll('tr').forEach(t => t.classList.remove('row-focus'));
-                    if (row) {
-                        row.classList.add('row-focus');
-                        row.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                        if(input){ input.focus(); input.select(); }
-                    }
-                }, 200);
-            } else {
-                playSound(false);
-                const t = document.getElementById('toast');
-                t.innerText = "❌ 库中无此码: " + target;
-                t.style.display = 'block';
-                setTimeout(() => t.style.display = 'none', 2000);
-                // 此时不关闭相机，不卡顿，可以立刻扫下一个
-            }
-        }
+async function startScanning(){
+document.getElementById('v').style.display='block';
 
-        function handleManual() {
-            handleBarcode(document.getElementById('manualInput').value);
-            document.getElementById('manualInput').value = '';
-        }
+await zxing.decodeFromConstraints({
+video:{facingMode:"environment",width:{ideal:640},height:{ideal:480}}
+},"v",(res)=>{
+if(res){
+const code=res.getText();
+const now=Date.now();
+if(code===lastCode && now-lastTime<800)return;
+lastCode=code;lastTime=now;
+handleBarcode(code,true);
+}
+});
 
-        function render() {
-            document.getElementById('tHead').innerHTML = `<tr>${columns.map(c => `<th style="width:${widths[c]||130}px">${c}</th>`).join('')}</tr>`;
-            document.getElementById('tBody').innerHTML = db.map((row, rIdx) => `
-                <tr id="r-${rIdx}">
-                    ${columns.map(c => `<td><input id="in-${rIdx}-${c}" type="${c==='实际数量'?'number':'text'}" value="${row[c]||''}" class="${c==='实际数量'?'qty-input':'p-2 w-full text-sm outline-none bg-transparent'}" onchange="saveVal(${rIdx},'${c}',this.value)" /></td>`).join('')}
-                </tr>`).join('');
-        }
+// 自动对焦增强
+setInterval(()=>{
+let track=document.getElementById('v').srcObject?.getVideoTracks()[0];
+if(track?.getCapabilities){
+let cap=track.getCapabilities();
+if(cap.focusMode?.includes('continuous')){
+track.applyConstraints({advanced:[{focusMode:'continuous'}]}).catch(()=>{});
+}
+}
+},800);
+}
 
-        function saveVal(r, c, v) { db[r][c] = v; push(); }
-        function push() {
-            localStorage.setItem(VER+'_DATA', JSON.stringify(db));
-            localStorage.setItem(VER+'_COLS', JSON.stringify(columns));
-            localStorage.setItem(VER+'_W', JSON.stringify(widths));
-        }
+function handleBarcode(code){
+const target=normalize(code);
 
-        // 列管理
-        function openColModal() { document.getElementById('colModal').style.display = 'flex'; renderColList(); }
-        function closeColModal() { document.getElementById('colModal').style.display = 'none'; render(); }
-        function renderColList() {
-            document.getElementById('colList').innerHTML = columns.map((c, i) => `
-                <div class="flex items-center justify-between bg-slate-50 p-3 rounded-xl border">
-                    <span class="font-bold">${c}</span>
-                    <div class="flex gap-2">
-                        <button onclick="moveCol(${i},-1)" class="p-2 border bg-white rounded shadow-sm">⬆️</button>
-                        <button onclick="moveCol(${i},1)" class="p-2 border bg-white rounded shadow-sm">⬇️</button>
-                        <button onclick="deleteCol('${c}')" class="p-2 text-red-500 font-bold ml-2">删</button>
-                    </div>
-                </div>`).join('');
-        }
-        function moveCol(i, d) {
-            let t = i + d;
-            if (t >= 0 && t < columns.length) {
-                [columns[i], columns[t]] = [columns[t], columns[i]];
-                push(); renderColList();
-            }
-        }
-        function addColumn() {
-            const n = document.getElementById('newColName').value.trim();
-            if (n && !columns.includes(n)) { columns.push(n); db.forEach(r => r[n] = ""); push(); renderColList(); }
-            document.getElementById('newColName').value = '';
-        }
-        function deleteCol(n) { if(confirm("彻底删除该列数据？")) { columns = columns.filter(c => c !== n); push(); renderColList(); } }
+let idx=db.findIndex(r=>Object.values(r).some(v=>normalize(v)===target));
 
-        // 文件处理
-        document.getElementById('fileInput').onchange = (e) => {
-            const file = e.target.files[0];
-            const reader = new FileReader();
-            reader.onload = (ev) => {
-                const wb = XLSX.read(new Uint8Array(ev.target.result), { type: 'array' });
-                const json = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { defval: "" });
-                if (json.length) {
-                    columns = Object.keys(json[0]);
-                    if (!columns.includes('实际数量')) columns.unshift('实际数量');
-                    db = json; push(); render();
-                }
-            };
-            reader.readAsArrayBuffer(file);
-        };
+if(idx!==-1){
 
-        function exportExcel() {
-            const ws = XLSX.utils.json_to_sheet(db, { header: columns });
-            const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, "Inventory");
-            X
+// 自动+1
+if(db[idx]["实际数量"]!==undefined){
+db[idx]["实际数量"]=Number(db[idx]["实际数量"]||0)+1;
+}
+
+render();
+save();
+
+}else{
+if(navigator.vibrate)navigator.vibrate(100);
+alert("未找到:"+code);
+}
+}
+
+function handleManual(){
+handleBarcode(document.getElementById('manualInput').value);
+document.getElementById('manualInput').value="";
+}
+
+document.getElementById('fileInput').addEventListener('change',async(e)=>{
+let file=e.target.files[0];
+let data=await file.arrayBuffer();
+let wb=XLSX.read(data);
+let json=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{defval:""});
+
+columns=Object.keys(json[0]);
+if(!columns.includes("实际数量")){
+columns.unshift("实际数量");
+json.forEach(r=>r["实际数量"]="");
+}
+
+db=json;
+save();
+render();
+});
+
+function render(){
+tHead.innerHTML="<tr>"+columns.map(c=>"<th>"+c+"</th>").join("")+"</tr>";
+tBody.innerHTML=db.map((r,i)=>"<tr>"+
+columns.map(c=>`<td><input value="${r[c]||""}" onchange="edit(${i},'${c}',this.value)" class="${c=='实际数量'?'qty-input':''}"></td>`).join("")
++"</tr>").join("");
+}
+
+function edit(i,c,v){db[i][c]=v;save();}
+
+function save(){
+localStorage.setItem(VER+"_DATA",JSON.stringify(db));
+localStorage.setItem(VER+"_COLS",JSON.stringify(columns));
+}
+
+function exportExcel(){
+let ws=XLSX.utils.json_to_sheet(db,{header:columns});
+let wb=XLSX.utils.book_new();
+XLSX.utils.book_append_sheet(wb,ws,"data");
+XLSX.writeFile(wb,"库存.xlsx");
+}
+
+/* 列管理 */
+function openColModal(){colModal.style.display="block";renderColList();}
+function closeColModal(){colModal.style.display="none";render();}
+
+function renderColList(){
+colList.innerHTML=columns.map((c,i)=>`
+<div>
+${c}
+<button onclick="moveCol(${i},-1)">⬆️</button>
+<button onclick="moveCol(${i},1)">⬇️</button>
+<button onclick="deleteCol('${c}')">删</button>
+</div>`).join("");
+}
+
+function moveCol(i,d){
+let t=i+d;
+if(t<0||t>=columns.length)return;
+[columns[i],columns[t]]=[columns[t],columns[i]];
+save();
+renderColList();
+render();
+}
+
+function deleteCol(c){
+columns=columns.filter(x=>x!==c);
+save();renderColList();render();
+}
+
+function addColumn(){
+let n=newColName.value.trim();
+if(n&&!columns.includes(n)){
+columns.push(n);
+db.forEach(r=>r[n]="");
+save();renderColList();render();
+}
+}
+
+if(columns.length)render();
+
+</script>
+
+</body>
+</html>
