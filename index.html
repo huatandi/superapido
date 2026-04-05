@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes, viewport-fit=cover">
-    <title>飞速盘点 S1.6 - 超灵敏扫码版</title>
+    <title>飞速盘点 S1.8 - SupeRapido</title>
     <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
     <script src="https://unpkg.com/@zxing/library@0.19.1"></script>
     <script src="https://cdn.tailwindcss.com"></script>
@@ -263,12 +263,11 @@
     </div>
 
     <div class="main-card">
-        <!-- 头部：闪电图标 + 飞速盘点 + 版本号 居中并排 -->
         <div class="bg-gradient-to-r from-blue-600 to-purple-600 p-3 text-white">
             <div class="flex items-center justify-center gap-3">
                 <span class="text-2xl">⚡</span>
                 <h1 class="text-2xl font-black tracking-tight">飞速盘点</h1>
-                <div class="version-badge">S1.6</div>
+                <div class="version-badge">S1.8</div>
             </div>
         </div>
 
@@ -298,7 +297,6 @@
                 </label>
             </div>
 
-            <!-- 表格容器 - 支持双指缩放 -->
             <div class="table-container" id="tableContainer">
                 <div style="touch-action: pan-x pan-y pinch-zoom; width: 100%; height: 100%; overflow: auto;">
                     <table id="mainTable" style="touch-action: pan-x pan-y pinch-zoom; width: 100%;">
@@ -316,7 +314,7 @@
 
     <div id="scanUI" class="fixed inset-0 bg-black z-[999] hidden flex-col">
         <div class="scan-header p-4 flex justify-between items-center">
-            <span class="font-bold text-blue-400 text-lg">🔍 扫描模式</span>
+            <span class="font-bold text-blue-400 text-lg">🔍 SupeRapido</span>
             <button onclick="stopScanning(true)" class="close-scan-btn text-white font-bold">
                 ✕ 关闭扫描
             </button>
@@ -335,7 +333,7 @@
     </div>
 
     <script>
-        const VERSION = "S1.6";
+        const VERSION = "S1.8";
         const STORAGE_KEY = "FEISUPANDIAN_" + VERSION;
         
         let db = [];
@@ -346,7 +344,7 @@
         let lastCode = "";
         let lastTime = 0;
         let currentFocusInterval = null;
-        let pendingJump = null; // 待跳转的行索引
+        let pendingJump = null;
 
         // 加载数据
         function loadData() {
@@ -398,7 +396,6 @@
             }, 2000);
         }
 
-        // 增强的播放声音（音量加大）
         function playBeep(success) {
             try {
                 const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -421,26 +418,21 @@
             }
         }
 
-        // 预渲染优化：不重新渲染整个表格，只更新高亮和滚动
         function fastJumpToRow(foundIndex) {
             const rowEl = document.getElementById(`row-${foundIndex}`);
             if (rowEl) {
-                // 移除所有高亮
                 document.querySelectorAll('#mainTable tbody tr').forEach(tr => {
                     tr.classList.remove('row-focus');
                 });
                 
-                // 添加高亮
                 rowEl.classList.add('row-focus');
                 
-                // 立即滚动（使用 auto 而不是 smooth，更快）
                 rowEl.scrollIntoView({ 
                     behavior: 'auto', 
                     block: 'center',
                     inline: 'center'
                 });
                 
-                // 聚焦数量输入框
                 const qtyInput = document.getElementById(`qty-${foundIndex}`);
                 if (qtyInput) {
                     qtyInput.focus();
@@ -459,12 +451,9 @@
             return false;
         }
 
-        // 强制关闭扫描并跳转（优化版 - 无卡顿）
         function stopScanningAndJump(foundIndex, productName) {
-            // 记录待跳转的行
             pendingJump = foundIndex;
             
-            // 立即关闭扫描界面（不等待）
             scanning = false;
             
             if (currentFocusInterval) {
@@ -486,13 +475,10 @@
                 videoEl.srcObject = null;
             }
             
-            // 立即隐藏扫描界面
             const scanUI = document.getElementById('scanUI');
             scanUI.style.display = 'none';
             
-            // 使用 requestAnimationFrame 确保扫描界面隐藏后再跳转
             requestAnimationFrame(() => {
-                // 尝试跳转，如果行不存在则重新渲染
                 if (!fastJumpToRow(foundIndex)) {
                     render();
                     requestAnimationFrame(() => {
@@ -503,7 +489,6 @@
             });
         }
 
-        // 超快速条码识别
         function handleBarcode(code, fromCamera = false) {
             if (!code) return false;
             
@@ -571,7 +556,7 @@
             }
         }
 
-        // 启动超灵敏扫描
+        // S1.8 增强版扫码配置 - SupeRapido
         async function startScanning() {
             if (scanning) {
                 showToast("扫描器已在运行", false);
@@ -590,12 +575,17 @@
             }
             
             try {
+                // 检测设备性能，动态调整配置（确保流畅运行）
+                const deviceMemory = navigator.deviceMemory || 4;
+                const isHighEnd = deviceMemory >= 6;
+                
+                // 摄像头配置（优化曝光和对焦，提高识别率）
                 const constraints = {
                     video: {
                         facingMode: { exact: "environment" },
                         width: { ideal: 1920, min: 1280 },
                         height: { ideal: 1080, min: 720 },
-                        frameRate: { ideal: 60, min: 30 }
+                        frameRate: { ideal: 30, min: 15 }
                     }
                 };
                 
@@ -612,10 +602,11 @@
                     };
                 }
                 
+                // S1.8 增强解码配置（不增加性能负担）
                 const hints = new Map();
-                hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
+                hints.set(ZXing.DecodeHintType.TRY_HARDER, true);      // 启用更激进的解码
                 hints.set(ZXing.DecodeHintType.CHARACTER_SET, "UTF-8");
-                hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, [
+                hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, [     // 支持多种条码格式
                     ZXing.BarcodeFormat.QR_CODE,
                     ZXing.BarcodeFormat.EAN_13,
                     ZXing.BarcodeFormat.EAN_8,
@@ -629,9 +620,14 @@
                     ZXing.BarcodeFormat.DATA_MATRIX,
                     ZXing.BarcodeFormat.PDF_417
                 ]);
+                // 可选：允许任意长度条码（提高识别率）
+                hints.set(ZXing.DecodeHintType.ALLOWED_LENGTHS, null);
+                // 启用 Codabar 开始结束字符返回
+                hints.set(ZXing.DecodeHintType.RETURN_CODABAR_START_END, true);
                 
                 reader = new ZXing.BrowserMultiFormatReader(hints);
-                reader.timeBetweenDecodingAttempts = 30;
+                // 解码间隔：高端机用30ms，中低端用50ms（保证流畅）
+                reader.timeBetweenDecodingAttempts = isHighEnd ? 30 : 50;
                 
                 await reader.decodeFromConstraints(finalConstraints, 'video', (result, error) => {
                     if (result && scanning) {
@@ -642,8 +638,9 @@
                     }
                 });
                 
-                showToast("扫描已启动 | 对准条码即可识别", false);
+                showToast("SupeRapido 智能识别已启动", false);
                 
+                // 增强对焦控制（提高模糊条码识别率）
                 const videoEl = document.getElementById('video');
                 const focusInterval = setInterval(() => {
                     if (!scanning) {
@@ -654,14 +651,27 @@
                         const track = videoEl.srcObject.getVideoTracks()[0];
                         if (track && track.getCapabilities) {
                             const caps = track.getCapabilities();
+                            // 连续对焦
                             if (caps.focusMode && caps.focusMode.includes('continuous')) {
                                 track.applyConstraints({
                                     advanced: [{ focusMode: 'continuous' }]
                                 }).catch(() => {});
                             }
+                            // 自动曝光补偿（改善对比度低的条码）
+                            if (caps.exposureMode && caps.exposureMode.includes('continuous')) {
+                                track.applyConstraints({
+                                    advanced: [{ exposureMode: 'continuous' }]
+                                }).catch(() => {});
+                            }
+                            // 白平衡补偿（改善印刷不清晰的条码）
+                            if (caps.whiteBalanceMode && caps.whiteBalanceMode.includes('continuous')) {
+                                track.applyConstraints({
+                                    advanced: [{ whiteBalanceMode: 'continuous' }]
+                                }).catch(() => {});
+                            }
                         }
                     }
-                }, 800);
+                }, 1000);
                 
                 currentFocusInterval = focusInterval;
                 
@@ -703,7 +713,7 @@
             const tbody = document.getElementById('tBody');
             
             if (!columns.length) {
-                tbody.innerHTML = '<tr><td colspan="10" class="text-center p-6 text-gray-500">暂无数据，请导入Excel或添加列表</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="10" class="text-center p-6 text-gray-500">暂无数据，请导入Excel或添加列表<tr></tr>';
                 return;
             }
             
@@ -732,12 +742,11 @@
                                     class="w-full p-2 text-xs outline-none bg-transparent"
                                     onchange="updateCell(${idx}, '${col}', this.value)" />`
                             }
-                         </td>
+                        </td>
                     `).join('')}
                 </tr>
             `).join('');
             
-            // 如果有待跳转的行，立即跳转
             if (pendingJump !== null) {
                 requestAnimationFrame(() => {
                     fastJumpToRow(pendingJump);
@@ -1006,7 +1015,7 @@
             }
         };
         
-        console.log(`⚡ 飞速盘点 ${VERSION} 已启动 | 跳转优化无卡顿 | 支持双指缩放`);
+        console.log(`⚡ 飞速盘点 ${VERSION} - SupeRapido 智能识别引擎已启动 | 支持双指缩放`);
     </script>
 </body>
 </html>
