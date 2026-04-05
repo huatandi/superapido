@@ -15,20 +15,42 @@
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
             min-height: 100vh;
-            padding: 8px;
+            padding: 12px;
         }
         .main-card {
             background: white;
-            border-radius: 20px;
+            border-radius: 24px;
             box-shadow: 0 10px 40px rgba(0,0,0,0.2);
             overflow: hidden;
-            max-width: 600px;
+            max-width: 1200px;
             margin: 0 auto;
+            width: 100%;
+        }
+        /* 平板和PC自适应 */
+        @media (min-width: 768px) {
+            body { padding: 20px; }
+            .main-card { max-width: 900px; }
+            .table-container { height: 55vh; }
+            .qty-input { height: 65px; font-size: 1.8rem; }
+        }
+        @media (min-width: 1024px) {
+            .main-card { max-width: 1100px; }
+            .table-container { height: 60vh; }
+        }
+        /* iPad Pro 专用优化 */
+        @media (min-width: 1024px) and (min-height: 1366px) {
+            .scan-frame { 
+                top: 35% !important;
+                width: 70% !important;
+                height: 200px !important;
+            }
+            .scan-header { padding: 20px !important; }
+            .close-scan-btn { font-size: 20px !important; padding: 14px 28px !important; }
         }
         .table-container { 
             background: white; 
             border: 1px solid #e2e8f0; 
-            height: 50vh; 
+            height: 45vh; 
             overflow: auto; 
             border-radius: 12px; 
             -webkit-overflow-scrolling: touch;
@@ -137,11 +159,11 @@
         }
         .scan-frame { 
             position: absolute; 
-            top: 50%; 
+            top: 40%; 
             left: 50%; 
             transform: translate(-50%, -50%); 
-            width: 85%; 
-            height: 250px; 
+            width: 80%; 
+            height: 220px; 
             border: 3px solid #3b82f6; 
             border-radius: 20px; 
             box-shadow: 0 0 0 2000px rgba(0,0,0,0.75); 
@@ -161,15 +183,6 @@
         @keyframes scanLineMove { 
             0%, 100% { top: 5%; }
             50% { top: 95%; }
-        }
-        .btn-icon {
-            transition: transform 0.1s ease;
-            font-size: 13px;
-            font-weight: bold;
-            white-space: nowrap;
-        }
-        .btn-icon:active {
-            transform: scale(0.95);
         }
         .col-item {
             background: white;
@@ -192,21 +205,42 @@
             font-size: 10px;
             font-weight: bold;
         }
-        .btn-group {
+        .btn-group-4 {
             display: grid;
             grid-template-columns: repeat(4, 1fr);
-            gap: 6px;
+            gap: 8px;
+            margin-bottom: 12px;
         }
         .action-btn {
-            padding: 10px 4px;
+            padding: 12px 4px;
             border-radius: 12px;
             font-weight: bold;
-            font-size: 12px;
+            font-size: 13px;
             text-align: center;
             transition: all 0.1s;
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
+        }
+        .bottom-btns {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
+            margin-top: 12px;
+        }
+        .bottom-btn {
+            padding: 14px 4px;
+            border-radius: 14px;
+            font-weight: bold;
+            font-size: 16px;
+            text-align: center;
+            transition: all 0.1s;
+        }
+        .cam-btn-large {
+            background: #3b82f6;
+            color: white;
+            font-size: 28px;
+            padding: 12px;
         }
         .close-scan-btn {
             background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
@@ -232,17 +266,17 @@
             50% { border-color: #10b981; box-shadow: 0 0 0 2000px rgba(16,185,129,0.3); }
         }
         @media (max-width: 480px) {
-            .action-btn {
-                font-size: 10px;
-                padding: 8px 2px;
-            }
+            .action-btn { font-size: 10px; padding: 10px 2px; }
+            .bottom-btn { font-size: 14px; padding: 12px 4px; }
             .qty-input { height: 48px; font-size: 1.2rem; }
-            .main-card { border-radius: 16px; }
-            body { padding: 6px; }
-            .close-scan-btn {
-                font-size: 14px;
-                padding: 8px 20px;
-            }
+            .cam-btn-large { font-size: 24px; }
+        }
+        @media (min-width: 768px) and (max-width: 1024px) {
+            .action-btn { font-size: 14px; }
+            .bottom-btn { font-size: 18px; }
+        }
+        .action-btn:active, .bottom-btn:active {
+            transform: scale(0.97);
         }
     </style>
 </head>
@@ -272,29 +306,24 @@
         </div>
 
         <div class="p-3">
-            <div class="flex gap-2 mb-3">
-                <button id="scanBtn" class="bg-blue-600 text-white rounded-xl active:scale-95 flex items-center justify-center" style="width: 70px; height: 70px; font-size: 32px;">
-                    📷
-                </button>
-                <div class="flex-1">
-                    <input type="text" id="manualInput" placeholder="📱 输入条码/编码/名称..." 
-                        class="w-full border-2 border-gray-300 rounded-xl px-3 py-2 font-bold text-base focus:border-blue-500 outline-none" />
-                </div>
+            <div class="mb-3">
+                <input type="text" id="manualInput" placeholder="📱 输入条码/编码/名称..." 
+                    class="w-full border-2 border-gray-300 rounded-xl px-4 py-3 font-bold text-base focus:border-blue-500 outline-none" />
             </div>
             
-            <div class="btn-group mb-3">
-                <button id="confirmBtn" class="action-btn bg-blue-600 text-white shadow-md">
-                    ✅ 确认
-                </button>
+            <div class="btn-group-4">
                 <button onclick="openColModal()" class="action-btn bg-gray-700 text-white shadow-md">
                     📊 列管理
-                </button>
-                <button onclick="hardReset()" class="action-btn bg-red-600 text-white shadow-md">
-                    🗑️ 重置
                 </button>
                 <label class="action-btn bg-emerald-600 text-white shadow-md cursor-pointer">
                     📂 导入 <input type="file" id="fileInput" class="hidden" accept=".xlsx, .xls" />
                 </label>
+                <button onclick="exportExcel()" class="action-btn bg-emerald-600 text-white shadow-md">
+                    💾 导出
+                </button>
+                <button id="confirmBtn" class="action-btn bg-blue-600 text-white shadow-md">
+                    ✅ 确认
+                </button>
             </div>
 
             <div class="table-container" id="tableContainer">
@@ -306,9 +335,17 @@
                 </div>
             </div>
             
-            <button onclick="exportExcel()" class="mt-3 w-full bg-emerald-600 text-white py-3 rounded-xl font-bold text-base shadow-lg active:scale-95 transition">
-                💾 导出 Excel
-            </button>
+            <div class="bottom-btns">
+                <button id="scanBtn" class="bottom-btn bg-blue-600 text-white shadow-lg cam-btn-large">
+                    📷 扫码
+                </button>
+                <button onclick="hardReset()" class="bottom-btn bg-red-600 text-white shadow-lg">
+                    🗑️ 重置
+                </button>
+                <button onclick="exportExcel()" class="bottom-btn bg-emerald-600 text-white shadow-lg">
+                    💾 导出Excel
+                </button>
+            </div>
         </div>
     </div>
 
@@ -326,7 +363,7 @@
             </div>
             <div class="absolute bottom-8 left-0 right-0 text-center">
                 <div class="bg-black/70 backdrop-blur text-white px-4 py-2 rounded-full inline-block text-sm font-bold border-2 border-blue-500">
-                    📷 将条码对准扫描框
+                    📷 将条码对准扫描框 (距离20-30cm最佳)
                 </div>
             </div>
         </div>
@@ -346,7 +383,10 @@
         let currentFocusInterval = null;
         let pendingJump = null;
 
-        // 加载数据
+        // 检测是否为 iPad
+        const isIPad = /iPad|Macintosh/.test(navigator.userAgent) && 'ontouchend' in document;
+        const isIPadPro = isIPad && (screen.width >= 1024 || screen.height >= 1366);
+
         function loadData() {
             try {
                 const saved = localStorage.getItem(STORAGE_KEY);
@@ -556,7 +596,7 @@
             }
         }
 
-        // S1.8 增强版扫码配置 - SupeRapido
+        // iPad Pro M4 优化版扫码
         async function startScanning() {
             if (scanning) {
                 showToast("扫描器已在运行", false);
@@ -575,19 +615,31 @@
             }
             
             try {
-                // 检测设备性能，动态调整配置（确保流畅运行）
-                const deviceMemory = navigator.deviceMemory || 4;
-                const isHighEnd = deviceMemory >= 6;
+                // iPad Pro M4 专用优化配置
+                let constraints;
                 
-                // 摄像头配置（优化曝光和对焦，提高识别率）
-                const constraints = {
-                    video: {
-                        facingMode: { exact: "environment" },
-                        width: { ideal: 1920, min: 1280 },
-                        height: { ideal: 1080, min: 720 },
-                        frameRate: { ideal: 30, min: 15 }
-                    }
-                };
+                if (isIPadPro) {
+                    // iPad Pro 优化：降低分辨率提高速度，增加帧率
+                    constraints = {
+                        video: {
+                            facingMode: { exact: "environment" },
+                            width: { ideal: 1280, min: 960 },
+                            height: { ideal: 720, min: 540 },
+                            frameRate: { ideal: 60, min: 30 }
+                        }
+                    };
+                    console.log("iPad Pro M4 优化模式已启用");
+                } else {
+                    // 默认配置
+                    constraints = {
+                        video: {
+                            facingMode: { exact: "environment" },
+                            width: { ideal: 1920, min: 1280 },
+                            height: { ideal: 1080, min: 720 },
+                            frameRate: { ideal: 30, min: 15 }
+                        }
+                    };
+                }
                 
                 let finalConstraints = constraints;
                 try {
@@ -602,11 +654,11 @@
                     };
                 }
                 
-                // S1.8 增强解码配置（不增加性能负担）
+                // 增强解码配置
                 const hints = new Map();
-                hints.set(ZXing.DecodeHintType.TRY_HARDER, true);      // 启用更激进的解码
+                hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
                 hints.set(ZXing.DecodeHintType.CHARACTER_SET, "UTF-8");
-                hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, [     // 支持多种条码格式
+                hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, [
                     ZXing.BarcodeFormat.QR_CODE,
                     ZXing.BarcodeFormat.EAN_13,
                     ZXing.BarcodeFormat.EAN_8,
@@ -620,14 +672,18 @@
                     ZXing.BarcodeFormat.DATA_MATRIX,
                     ZXing.BarcodeFormat.PDF_417
                 ]);
-                // 可选：允许任意长度条码（提高识别率）
                 hints.set(ZXing.DecodeHintType.ALLOWED_LENGTHS, null);
-                // 启用 Codabar 开始结束字符返回
                 hints.set(ZXing.DecodeHintType.RETURN_CODABAR_START_END, true);
                 
                 reader = new ZXing.BrowserMultiFormatReader(hints);
-                // 解码间隔：高端机用30ms，中低端用50ms（保证流畅）
-                reader.timeBetweenDecodingAttempts = isHighEnd ? 30 : 50;
+                
+                // iPad Pro 优化：更快的解码间隔
+                if (isIPadPro) {
+                    reader.timeBetweenDecodingAttempts = 40;
+                } else {
+                    const deviceMemory = navigator.deviceMemory || 4;
+                    reader.timeBetweenDecodingAttempts = deviceMemory >= 6 ? 30 : 50;
+                }
                 
                 await reader.decodeFromConstraints(finalConstraints, 'video', (result, error) => {
                     if (result && scanning) {
@@ -638,9 +694,9 @@
                     }
                 });
                 
-                showToast("SupeRapido 智能识别已启动", false);
+                showToast(isIPadPro ? "iPad Pro 优化模式已启动 | 距离20-30cm最佳" : "SupeRapido 智能识别已启动", false);
                 
-                // 增强对焦控制（提高模糊条码识别率）
+                // 增强对焦控制
                 const videoEl = document.getElementById('video');
                 const focusInterval = setInterval(() => {
                     if (!scanning) {
@@ -651,19 +707,16 @@
                         const track = videoEl.srcObject.getVideoTracks()[0];
                         if (track && track.getCapabilities) {
                             const caps = track.getCapabilities();
-                            // 连续对焦
                             if (caps.focusMode && caps.focusMode.includes('continuous')) {
                                 track.applyConstraints({
                                     advanced: [{ focusMode: 'continuous' }]
                                 }).catch(() => {});
                             }
-                            // 自动曝光补偿（改善对比度低的条码）
                             if (caps.exposureMode && caps.exposureMode.includes('continuous')) {
                                 track.applyConstraints({
                                     advanced: [{ exposureMode: 'continuous' }]
                                 }).catch(() => {});
                             }
-                            // 白平衡补偿（改善印刷不清晰的条码）
                             if (caps.whiteBalanceMode && caps.whiteBalanceMode.includes('continuous')) {
                                 track.applyConstraints({
                                     advanced: [{ whiteBalanceMode: 'continuous' }]
@@ -671,7 +724,7 @@
                             }
                         }
                     }
-                }, 1000);
+                }, isIPadPro ? 800 : 1000);
                 
                 currentFocusInterval = focusInterval;
                 
@@ -742,7 +795,7 @@
                                     class="w-full p-2 text-xs outline-none bg-transparent"
                                     onchange="updateCell(${idx}, '${col}', this.value)" />`
                             }
-                        </td>
+                        </tr>
                     `).join('')}
                 </tr>
             `).join('');
@@ -1015,7 +1068,7 @@
             }
         };
         
-        console.log(`⚡ 飞速盘点 ${VERSION} - SupeRapido 智能识别引擎已启动 | 支持双指缩放`);
+        console.log(`⚡ 飞速盘点 ${VERSION} - SupeRapido 智能识别引擎已启动 | iPad Pro 优化模式: ${isIPadPro ? '已启用' : '未启用'}`);
     </script>
 </body>
 </html>
